@@ -249,19 +249,10 @@ if __name__ == "__main__":
             if isinstance(func,types.FunctionType):
                 code = unpyc3.Code(func.__code__)
                 source = str(code.get_suite(include_declarations=False, look_for_docstring=True))
-                #compiled = compile(source, '<string>', 'exec')
-        # now 
+
         import unpyc3_tests
         code = unpyc3.decompile(unpyc3_tests)
         compiled = compile(str(code), '<string>', 'exec')
         code2 = unpyc3.decompile(compiled)
-        # d = difflib.Differ()
-        # result = list(d.compare(str(code), str(code2)))
-        # from pprint import pprint
-        # pprint(result)
         diff = difflib.unified_diff(str(code), str(code2), fromfile='original', tofile='converted')
         sys.stdout.writelines(diff)
-    else:
-        pass
-    #compiled2 = compile(str(code2), '<string>', 'exec')
-        
