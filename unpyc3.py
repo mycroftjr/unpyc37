@@ -558,6 +558,21 @@ class PyConst(PyExpr):
         return isinstance(other, PyConst) and self.val == other.val
 
 
+class PyFormatValue(PyConst):
+    def __str__(self):
+        return f'{{{self.val}}}'
+
+
+class PyFormatString(PyExpr):
+    precedence = 100
+
+    def __init__(self, params):
+        super().__init__()
+        self.params = params
+
+    def __str__(self):
+        return "f'{}'".format(''.join([str(p) if isinstance(p, PyFormatValue) else str(p.val) for p in self.params]))
+
 class PyTuple(PyExpr):
     precedence = 0
 
@@ -972,6 +987,7 @@ binary_ops = [
     ('AND', 'And', '{} & {}', 9, '{} &= {}'),
     ('XOR', 'Xor', '{} ^ {}', 8, '{} ^= {}'),
     ('OR', 'Or', '{} | {}', 7, '{} |= {}'),
+    ('MATRIX_MULTIPLY', 'MatrixMultiply', '{} @ {}', 12, '{} @= {}'),
 ]
 
 
@@ -2392,6 +2408,15 @@ class SuiteDecompiler:
     def WITH_CLEANUP_FINISH(self, addr, *args, **kwargs):
         jaddr = addr.jump()
         return jaddr
+
+    # Formatted string literals
+    def FORMAT_VALUE(self, addr, flags):
+        val = self.stack.pop()
+        self.stack.push(PyFormatValue(val))
+
+    def BUILD_STRING(self, addr, c):
+        params = self.stack.pop(c)
+        self.stack.push(PyFormatString(params))
 
 def make_dynamic_instr(cls):
     def method(self, addr):
