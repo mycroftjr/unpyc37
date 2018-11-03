@@ -28,9 +28,12 @@ __all__ = ['decompile']
 def set_trace(trace_function):
     global current_trace
     current_trace = trace_function if trace_function else _trace
+
+
 def get_trace():
     global current_trace
     return None if current_trace == _trace else current_trace
+
 
 def trace(*args):
     global current_trace
@@ -56,6 +59,7 @@ import inspect
 
 import struct
 import sys
+
 # Masks for code object's co_flag attribute
 VARARGS = 4
 VARKEYWORDS = 8
@@ -276,24 +280,23 @@ def code_walker(code):
         op = code[i]
         offset = 1
         if sys.version_info >= (3, 6):
-            oparg = code[i+offset]
+            oparg = code[i + offset]
             offset += 1
         elif op >= HAVE_ARGUMENT:
-                oparg = code[i + offset] + code[i + offset+1] * 256 + extended_arg
-                extended_arg = 0
-                offset += 2
+            oparg = code[i + offset] + code[i + offset + 1] * 256 + extended_arg
+            extended_arg = 0
+            offset += 2
         if op == EXTENDED_ARG:
             if sys.version_info >= (3, 6):
-                op = code[i+offset]
+                op = code[i + offset]
                 offset += 1
                 oparg <<= 8
-                oparg |= code[i+offset]
+                oparg |= code[i + offset]
                 offset += 1
             else:
                 extended_arg = oparg * 65536
         yield i, (op, oparg)
         i += offset
-
 
 
 class Code:
@@ -310,7 +313,7 @@ class Code:
         self.name = code_obj.co_name
         self.globals = []
         self.nonlocals = []
-        self.jump_targets =[]
+        self.jump_targets = []
         self.find_else()
         self.find_jumps()
         trace('================================================')
@@ -339,6 +342,7 @@ class Code:
 
     def iscellvar(self, i):
         return i < len(self.code_obj.co_cellvars)
+
     def find_jumps(self):
         for addr in self:
             opcode, arg = addr
@@ -354,7 +358,7 @@ class Code:
             if opcode in pop_jump_if_opcodes:
                 jump_addr = self.address(arg)
                 if (jump_addr[-1].opcode in else_jump_opcodes
-                    or jump_addr.opcode == FOR_ITER):
+                        or jump_addr.opcode == FOR_ITER):
                     last_jump = addr
                     jumps[jump_addr] = addr
             elif opcode == JUMP_ABSOLUTE:
@@ -454,19 +458,19 @@ class Address:
         arg = self.arg or "  "
         jdest = '\t(to {})'.format(jump.addr) if jump and jump.addr != self.arg else ''
         val = ''
-        op = opname[self.opcode].ljust(18,' ')
+        op = opname[self.opcode].ljust(18, ' ')
         try:
 
-                val = self.code.globals[self.arg] and self.arg+1 < len(self.code.globals) if 'GLOBAL' in op else \
-                      self.code.names[self.arg] if 'ATTR' in op else \
-                      self.code.names[self.arg] if 'NAME' in op else \
-                      self.code.names[self.arg] if 'LOAD_METHOD' in op else \
-                      self.code.consts[self.arg] if 'CONST' in op else \
-                      self.code.varnames[self.arg] if 'FAST' in op else \
-                      self.code.derefnames[self.arg] if 'DEREF' in op else \
-                      cmp_op[self.arg] if 'COMPARE' in op else ''
-                if val != '':
-                    val = '\t({})'.format(val)
+            val = self.code.globals[self.arg] and self.arg + 1 < len(self.code.globals) if 'GLOBAL' in op else \
+                self.code.names[self.arg] if 'ATTR' in op else \
+                    self.code.names[self.arg] if 'NAME' in op else \
+                        self.code.names[self.arg] if 'LOAD_METHOD' in op else \
+                            self.code.consts[self.arg] if 'CONST' in op else \
+                                self.code.varnames[self.arg] if 'FAST' in op else \
+                                    self.code.derefnames[self.arg] if 'DEREF' in op else \
+                                        cmp_op[self.arg] if 'COMPARE' in op else ''
+            if val != '':
+                val = '\t({})'.format(val)
         except:
             pass
 
@@ -594,6 +598,7 @@ class PyFormatString(PyExpr):
     def __str__(self):
         return "f'{}'".format(''.join([str(p) if isinstance(p, PyFormatValue) else str(p.val) for p in self.params]))
 
+
 class PyTuple(PyExpr):
     precedence = 0
 
@@ -615,6 +620,7 @@ class PyTuple(PyExpr):
 
     def wrap(self, condition=True):
         return str(self)
+
 
 class PyList(PyExpr):
     precedence = 16
@@ -798,7 +804,7 @@ class PyAttribute(PyExpr):
 class PyCallFunction(PyExpr, AwaitableMixin):
     precedence = 15
 
-    def __init__(self, func: PyAttribute, args: list, kwargs:list, varargs=None, varkw=None):
+    def __init__(self, func: PyAttribute, args: list, kwargs: list, varargs=None, varkw=None):
         AwaitableMixin.__init__(self)
         self.func = func
         self.args = args
@@ -809,7 +815,7 @@ class PyCallFunction(PyExpr, AwaitableMixin):
     def __str__(self):
         funcstr = self.func.wrap(self.func.precedence < self.precedence)
         if hasattr(self.args, '__iter__') and len(self.args) == 1 and not (self.kwargs or self.varargs
-                                        or self.varkw):
+                                                                           or self.varkw):
             arg = self.args[0]
             if isinstance(arg, PyGenExpr):
                 # Only one pair of brackets arount a single arg genexpr
@@ -872,13 +878,14 @@ class FunctionDefinition:
         params.extend(kwparams)
         if code_obj.co_flags & VARKEYWORDS:
             params.append("**" + code_obj.co_varnames[l])
-            
+
         return params
-        
+
     def getreturn(self):
         if self.paramobjs and 'return' in self.paramobjs:
             return self.paramobjs['return']
         return None
+
 
 class PyLambda(PyExpr, FunctionDefinition):
     precedence = 1
@@ -909,7 +916,7 @@ class PyComp(PyExpr):
     """
     precedence = 16
 
-    def __init__(self, code, defaults, kwdefaults, closure, paramobjs={},annotations=[]):
+    def __init__(self, code, defaults, kwdefaults, closure, paramobjs={}, annotations=[]):
         assert not defaults and not kwdefaults
         self.code = code
         code[0].change_instr(NOP)
@@ -947,7 +954,7 @@ class PyGenExpr(PyComp):
     precedence = 16
     pattern = "({})"
 
-    def __init__(self, code, defaults, kwdefaults, closure, paramobjs={},annotations=[]):
+    def __init__(self, code, defaults, kwdefaults, closure, paramobjs={}, annotations=[]):
         self.code = code
 
 
@@ -1147,10 +1154,11 @@ class ImportFrom:
         assert isinstance(imp, ImportStatement)
 
         if imp.fromlist != PyConst(None):
-            
+
             imp.aslist.append(dest.name)
         else:
             imp.alias = dest
+
 
 class SimpleStatement(PyStatement):
     def __init__(self, val):
@@ -1234,7 +1242,7 @@ class DecorableStatement(PyStatement):
 
 class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
     def __init__(self, code: Code, defaults, kwdefaults, closure, paramobjs=None, annotations=None):
-        FunctionDefinition.__init__(self, code, defaults, kwdefaults, closure, paramobjs,annotations)
+        FunctionDefinition.__init__(self, code, defaults, kwdefaults, closure, paramobjs, annotations)
         DecorableStatement.__init__(self)
         AsyncMixin.__init__(self)
         self.is_async = code.is_coroutine()
@@ -1349,7 +1357,7 @@ class ClassStatement(DecorableStatement):
     def display_undecorated(self, indent):
         if self.parents or self.kwargs:
             args = [str(x) for x in self.parents]
-            kwargs = ["{}={}".format(str(k).replace('\'',''), v) for k, v in self.kwargs]
+            kwargs = ["{}={}".format(str(k).replace('\'', ''), v) for k, v in self.kwargs]
             all_args = ", ".join(args + kwargs)
             indent.write("class {}({}):", self.name, all_args)
         else:
@@ -1362,7 +1370,7 @@ class ClassStatement(DecorableStatement):
             if isinstance(last_stmt, SimpleStatement):
                 if last_stmt.val.startswith("return "):
                     suite.statements.pop()
-            clean_vars = ['__module__','__qualname__']
+            clean_vars = ['__module__', '__qualname__']
             for clean_var in clean_vars:
                 for i in range(len(suite.statements)):
                     stmt = suite.statements[i]
@@ -1576,7 +1584,7 @@ class SuiteDecompiler:
         start_except = addr.jump()
         start_try = addr[1]
         end_try = start_except
-        if sys.version_info < (3,7):
+        if sys.version_info < (3, 7):
             if end_try.opcode == JUMP_FORWARD:
                 end_try = end_try[1] + end_try.arg
             elif end_try.opcode == JUMP_ABSOLUTE:
@@ -1610,13 +1618,13 @@ class SuiteDecompiler:
                     end_except = end_except[1]
                 # Handle edge case where there is a return in the except
                 if end_except[-1].opcode == RETURN_VALUE:
-                    d_except = SuiteDecompiler(start_except,end_except)
+                    d_except = SuiteDecompiler(start_except, end_except)
                     end_except = d_except.run()
                     stmt.add_except_clause(None, d_except.suite)
                     self.suite.add_statement(stmt)
                     return end_except
 
-                d_except = SuiteDecompiler(start_except,end_except)
+                d_except = SuiteDecompiler(start_except, end_except)
                 end_except = d_except.run()
                 stmt.add_except_clause(None, d_except.suite)
                 start_except = end_except[2]
@@ -1718,11 +1726,9 @@ class SuiteDecompiler:
         name = self.code.varnames[var_num]
         self.stack.push(name)
 
-
     def STORE_FAST(self, addr, var_num):
         name = self.code.varnames[var_num]
         self.store(name)
-
 
     def DELETE_FAST(self, addr, var_num):
         name = self.code.varnames[var_num]
@@ -1781,8 +1787,7 @@ class SuiteDecompiler:
         name = self.code.names[namei]
         self.write("del {}", name)
 
-
-    #METHOD
+    # METHOD
     def LOAD_METHOD(self, addr, namei):
         expr = self.stack.pop()
         attrname = self.code.names[namei]
@@ -1819,13 +1824,13 @@ class SuiteDecompiler:
             # It's none of the above, so it must be a normal function call
             func_call = PyCallFunction(func, posargs, kwargs, varargs, varkw)
             self.stack.push(func_call)
+
     # ATTR
 
     def LOAD_ATTR(self, addr, namei):
         expr = self.stack.pop()
         attrname = self.code.names[namei]
         self.stack.push(PyAttribute(expr, attrname))
-
 
     def STORE_ATTR(self, addr, namei):
         expr = self.stack.pop()
@@ -1909,20 +1914,20 @@ class SuiteDecompiler:
         value = self.stack.pop()
         self.stack.push(PyYieldFrom(value))
 
-    def CALL_FUNCTION_CORE(self, func,posargs,kwargs,varargs,varkw):
+    def CALL_FUNCTION_CORE(self, func, posargs, kwargs, varargs, varkw):
         if func is self.BUILD_CLASS:
             # It's a class construction
             # TODO: check the assert statement below is correct
-            #assert not (have_var or have_kw)
+            # assert not (have_var or have_kw)
             func, name, *parents = posargs
             self.stack.push(ClassStatement(func, name, parents, kwargs))
         elif isinstance(func, PyComp):
             # It's a list/set/dict comprehension or generator expression
-            #assert not (have_var or have_kw)
+            # assert not (have_var or have_kw)
             assert len(posargs) == 1 and not kwargs
             func.set_iterable(posargs[0])
             self.stack.push(func)
-        elif posargs and isinstance(posargs,list) and isinstance(posargs[0], DecorableStatement):
+        elif posargs and isinstance(posargs, list) and isinstance(posargs[0], DecorableStatement):
             # It's a decorator for a def/class statement
             assert len(posargs) == 1 and not kwargs
             defn = posargs[0]
@@ -1958,7 +1963,7 @@ class SuiteDecompiler:
             keys = self.stack.pop()
             kwargc = len(keys.val)
             kwarg_values = self.stack.pop(kwargc)
-            posargs = self.stack.pop(argc-kwargc)
+            posargs = self.stack.pop(argc - kwargc)
             func = self.stack.pop()
             kwarg_dict = list(zip([PyName(k) for k in keys], kwarg_values))
             self.CALL_FUNCTION_CORE(func, posargs, kwarg_dict, None, None)
@@ -1985,10 +1990,10 @@ class SuiteDecompiler:
         if not posargs:
             posargs = PyTuple([])
 
-        assert isinstance(kwarg_dict,PyDict)
+        assert isinstance(kwarg_dict, PyDict)
         for i in range(len(kwarg_dict.items)):
             k, v = kwarg_dict.items[i]
-            if isinstance(v,PyConst) and v.val == '**KWARG**':
+            if isinstance(v, PyConst) and v.val == '**KWARG**':
                 kwarg_dict.items.pop(i)
                 kwvar = k.val
                 break
@@ -2129,7 +2134,6 @@ class SuiteDecompiler:
                 self.stack.push(py_and)
                 return end_addr[3]
 
-
         d = SuiteDecompiler(addr[1], end_addr, self.stack)
         d.run()
         # if end_addr.opcode == RETURN_VALUE:
@@ -2192,7 +2196,7 @@ class SuiteDecompiler:
             if for_iter:
                 end_of_for = for_iter.jump()
                 if end_of_for.addr > addr.addr:
-                    gen = jump_addr.seek_forward( (YIELD_VALUE,LIST_APPEND), end_of_for)
+                    gen = jump_addr.seek_forward((YIELD_VALUE, LIST_APPEND), end_of_for)
                     if gen:
                         if not truthiness:
                             truthiness = not truthiness
@@ -2200,10 +2204,6 @@ class SuiteDecompiler:
                                 cond = PyNot(cond)
                         self.push_popjump(truthiness, jump_addr, cond)
                         return None
-
-
-
-
 
             self.push_popjump(truthiness, jump_addr, cond)
 
@@ -2222,7 +2222,7 @@ class SuiteDecompiler:
                 if a.opcode in pop_jump_if_opcodes and a.arg >= addr.arg:
                     return None
                 a = a[1]
-            #if there are no nested conditionals and no else clause, write the true portion and jump ahead to the end of the conditional
+            # if there are no nested conditionals and no else clause, write the true portion and jump ahead to the end of the conditional
             cond = self.pop_popjump()
             end_true = jump_addr
             if truthiness:
@@ -2312,7 +2312,7 @@ class SuiteDecompiler:
 
     def JUMP_ABSOLUTE(self, addr, target):
         # print("*** JUMP ABSOLUTE ***", addr)
-        #return addr.jump()
+        # return addr.jump()
 
         # TODO: print out continue if not final jump
         jump_addr = addr.jump()
@@ -2389,13 +2389,14 @@ class SuiteDecompiler:
         if argc & 2:
             kwdefaults = self.stack.pop()
             if isinstance(kwdefaults, PyDict):
-                kwdefaults = {str(k[0].val): str(k[1] if isinstance(k[1], PyExpr) else PyConst(k[1])) for k in kwdefaults.items}
+                kwdefaults = {str(k[0].val): str(k[1] if isinstance(k[1], PyExpr) else PyConst(k[1])) for k in
+                              kwdefaults.items}
             if not kwdefaults:
                 kwdefaults = {}
         if argc & 1:
             defaults = list(map(lambda x: str(x if isinstance(x, PyExpr) else PyConst(x)), self.stack.pop()))
         func_maker = code_map.get(code.name, DefStatement)
-        self.stack.push(func_maker(code, defaults, kwdefaults, closure, annotations,annotations))
+        self.stack.push(func_maker(code, defaults, kwdefaults, closure, annotations, annotations))
 
     def MAKE_FUNCTION(self, addr, argc, is_closure=False):
         if sys.version_info < (3, 6):
@@ -2435,8 +2436,10 @@ class SuiteDecompiler:
     def WITH_CLEANUP(self, addr, *args, **kwargs):
         # self.write("# ERROR: {} : {}".format(addr, args))
         pass
+
     def WITH_CLEANUP_START(self, addr, *args, **kwargs):
         pass
+
     def WITH_CLEANUP_FINISH(self, addr, *args, **kwargs):
         jaddr = addr.jump()
         return jaddr
@@ -2506,10 +2509,13 @@ class SuiteDecompiler:
         new_end = new_end.seek_forward(POP_BLOCK)
         return new_end
 
+
 def make_dynamic_instr(cls):
     def method(self, addr):
         cls.instr(self.stack)
+
     return method
+
 
 # Create unary operators types and opcode handlers
 for op, name, ptn, prec in unary_ops:
