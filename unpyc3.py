@@ -377,7 +377,7 @@ class Code:
                 jumps[addr] = last_jump
         self.else_jumps = set(jumps.values())
 
-    def get_suite(self, include_declarations=True, look_for_docstring=False):
+    def get_suite(self, include_declarations=True, look_for_docstring=False) -> Suite:
         dec = SuiteDecompiler(self[0])
         dec.run()
         first_stmt = dec.suite and dec.suite[0]
@@ -428,6 +428,9 @@ class Code:
         """
         if name not in self.nonlocals:
             self.nonlocals.append(name)
+
+    def is_coroutine(self):
+        return self.code_obj.co_flags & 0x80 or self.code_obj.co_flags & 0x100
 
 
 class Address:
@@ -521,6 +524,24 @@ class Address:
     def seek_forward(self, opcode: tuple, end: Address = None) -> Address:
         return self.seek(opcode, 1, end)
 
+
+class AsyncMixin:
+    def __init__(self):
+        self.is_async = False
+
+    @property
+    def async_prefix(self):
+        return 'async ' if self.is_async else ''
+
+
+class AwaitableMixin:
+
+    def __init__(self):
+        self.is_awaited = False
+
+    @property
+    def await_prefix(self):
+        return 'await ' if self.is_awaited else ''
 
 
 class PyExpr:
@@ -774,10 +795,11 @@ class PyAttribute(PyExpr):
         return "{}.{}".format(expr_str, self.attrname)
 
 
-class PyCallFunction(PyExpr):
+class PyCallFunction(PyExpr, AwaitableMixin):
     precedence = 15
 
     def __init__(self, func: PyAttribute, args: list, kwargs:list, varargs=None, varkw=None):
+        AwaitableMixin.__init__(self)
         self.func = func
         self.args = args
         self.kwargs = kwargs
@@ -799,17 +821,20 @@ class PyCallFunction(PyExpr):
             args.append("*{}".format(self.varargs))
         if self.varkw is not None:
             args.append("**{}".format(self.varkw))
-        return "{}({})".format(funcstr, ", ".join(args))
+        return "{}{}({})".format(self.await_prefix, funcstr, ", ".join(args))
 
 
 class FunctionDefinition:
-    def __init__(self, code, defaults, kwdefaults, closure, paramobjs=None, annotations=None):
+    def __init__(self, code: Code, defaults, kwdefaults, closure, paramobjs=None, annotations=None):
         self.code = code
         self.defaults = defaults
         self.kwdefaults = kwdefaults
         self.closure = closure
         self.paramobjs = paramobjs if paramobjs else {}
         self.annotations = annotations if annotations else []
+
+    def is_coroutine(self):
+        return self.code.code_obj.co_flags & 0x100
 
     def getparams(self):
         code_obj = self.code.code_obj
@@ -1165,19 +1190,20 @@ class IfStatement(PyStatement):
         return self.true_suite.gen_display(seq + (s,))
 
 
-class ForStatement(PyStatement):
+class ForStatement(PyStatement, AsyncMixin):
     def __init__(self, iterable):
+        AsyncMixin.__init__(self)
         self.iterable = iterable
 
     def store(self, dec, dest):
         self.dest = dest
 
     def display(self, indent):
-        indent.write("for {} in {}:", self.dest, self.iterable)
+        indent.write("{}for {} in {}:", self.async_prefix, self.dest, self.iterable)
         self.body.display(indent + 1)
 
     def gen_display(self, seq=()):
-        s = "for {} in {}".format(self.dest, self.iterable)
+        s = "{}for {} in {}".format(self.async_prefix, self.dest, self.iterable)
         return self.body.gen_display(seq + (s,))
 
 
@@ -1206,19 +1232,20 @@ class DecorableStatement(PyStatement):
         self.decorators.append(f)
 
 
-class DefStatement(FunctionDefinition, DecorableStatement):
-    def __init__(self, code, defaults, kwdefaults, closure, paramobjs=None, annotations=None):
+class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
+    def __init__(self, code: Code, defaults, kwdefaults, closure, paramobjs=None, annotations=None):
         FunctionDefinition.__init__(self, code, defaults, kwdefaults, closure, paramobjs,annotations)
         DecorableStatement.__init__(self)
+        AsyncMixin.__init__(self)
+        self.is_async = code.is_coroutine()
 
     def display_undecorated(self, indent):
-
         paramlist = ", ".join(self.getparams())
         result = self.getreturn()
         if result:
-            indent.write("def {}({}) -> {}:", self.code.name, paramlist, result)
+            indent.write("{}def {}({}) -> {}:", self.async_prefix, self.code.name, paramlist, result)
         else:
-            indent.write("def {}({}):", self.code.name, paramlist)
+            indent.write("{}def {}({}):", self.async_prefix, self.code.name, paramlist)
         # Assume that co_consts starts with None unless the function
         # has a docstring, in which case it starts with the docstring
         if self.code.consts[0] != PyConst(None):
@@ -1278,6 +1305,11 @@ class WithStatement(PyStatement):
     def __init__(self, with_expr):
         self.with_expr = with_expr
         self.with_name = None
+        self.is_async = False
+
+    @property
+    def async_prefix(self):
+        return 'async ' if self.is_async else ''
 
     def store(self, dec, dest):
         self.with_name = dest
@@ -1299,7 +1331,7 @@ class WithStatement(PyStatement):
         if len(self.suite) == 1 and isinstance(self.suite[0], WithStatement):
             self.suite[0].display(indent, args)
         else:
-            indent.write("with {}:", ", ".join(args))
+            indent.write(self.async_prefix + "with {}:", ", ".join(args))
             self.suite.display(indent + 1)
 
 
@@ -2417,6 +2449,62 @@ class SuiteDecompiler:
     def BUILD_STRING(self, addr, c):
         params = self.stack.pop(c)
         self.stack.push(PyFormatString(params))
+
+    # Coroutines
+    def GET_AWAITABLE(self, addr: Address):
+        func: AwaitableMixin = self.stack.pop()
+        func.is_awaited = True
+        self.stack.push(func)
+        yield_op = addr.seek_forward(YIELD_FROM)
+        return yield_op[1]
+
+    def BEFORE_ASYNC_WITH(self, addr: Address, a):
+        with_addr = addr.seek_forward(SETUP_ASYNC_WITH)
+        end_with = with_addr.jump()
+        with_stmt = WithStatement(self.stack.pop())
+        with_stmt.is_async = True
+        d_with = SuiteDecompiler(addr[1], end_with)
+        d_with.stack.push(with_stmt)
+        d_with.run()
+        with_stmt.suite = d_with.suite
+        self.suite.add_statement(with_stmt)
+        if sys.version_info <= (3, 4):
+            assert end_with.opcode == WITH_CLEANUP
+            assert end_with[1].opcode == END_FINALLY
+            return end_with[2]
+        else:
+            assert end_with.opcode == WITH_CLEANUP_START
+            assert end_with[1].opcode == GET_AWAITABLE
+            assert end_with[4].opcode == WITH_CLEANUP_FINISH
+            return end_with[5]
+
+    def SETUP_ASYNC_WITH(self, addr: Address):
+        pass
+
+    def GET_AITER(self, addr: Address):
+        return addr[2]
+
+    def GET_ANEXT(self, addr: Address):
+        iterable = self.stack.pop()
+        for_stmt = ForStatement(iterable)
+        for_stmt.is_async = True
+        jump_addr = addr[-1].jump()
+        d_body = SuiteDecompiler(addr[3], jump_addr[-1])
+        d_body.stack.push(for_stmt)
+        d_body.run()
+        jump_addr = jump_addr[-1].jump()
+        new_start = jump_addr
+        new_end = jump_addr[-2].jump()[-1]
+        d_body.start_addr = new_start
+
+        d_body.end_addr = new_end
+
+        d_body.run()
+
+        for_stmt.body = d_body.suite
+        self.suite.add_statement(for_stmt)
+        new_end = new_end.seek_forward(POP_BLOCK)
+        return new_end
 
 def make_dynamic_instr(cls):
     def method(self, addr):
