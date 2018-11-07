@@ -1468,8 +1468,7 @@ class SuiteDecompiler:
         while addr and addr < end_addr:
             opcode, arg = addr
             method = getattr(self, opname[opcode])
-            sig = inspect.signature(method)
-            if len(sig.parameters) == 1:
+            if opcode < HAVE_ARGUMENT:
                 new_addr = method(addr)
             else:
                 new_addr = method(addr, arg)
@@ -2466,7 +2465,7 @@ class SuiteDecompiler:
         yield_op = addr.seek_forward(YIELD_FROM)
         return yield_op[1]
 
-    def BEFORE_ASYNC_WITH(self, addr: Address, a):
+    def BEFORE_ASYNC_WITH(self, addr: Address):
         with_addr = addr.seek_forward(SETUP_ASYNC_WITH)
         end_with = with_addr.jump()
         with_stmt = WithStatement(self.stack.pop())
@@ -2486,7 +2485,7 @@ class SuiteDecompiler:
             assert end_with[4].opcode == WITH_CLEANUP_FINISH
             return end_with[5]
 
-    def SETUP_ASYNC_WITH(self, addr: Address):
+    def SETUP_ASYNC_WITH(self, addr: Address, arg):
         pass
 
     def GET_AITER(self, addr: Address):
