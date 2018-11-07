@@ -22,6 +22,8 @@ def foo(x, y, z=3, *args):
 """
 from __future__ import annotations
 
+from typing import Union
+
 __all__ = ['decompile']
 
 
@@ -1118,7 +1120,7 @@ class ImportStatement(PyStatement):
         self.fromlist = fromlist
         self.aslist = []
 
-    def store(self, dec, dest):
+    def store(self, dec: SuiteDecompiler, dest):
         self.alias = dest
         dec.suite.add_statement(self)
 
@@ -1531,7 +1533,7 @@ class SuiteDecompiler:
     # All opcode methods in CAPS below.
     #
 
-    def SETUP_LOOP(self, addr, delta):
+    def SETUP_LOOP(self, addr: Address, delta):
         jump_addr = addr[1] + delta
         end_addr = jump_addr[-1]
         if end_addr.opcode == JUMP_ABSOLUTE:  # while 1 ???
@@ -2176,7 +2178,7 @@ class SuiteDecompiler:
     # If-else statements/expressions and related structures
     #
 
-    def POP_JUMP_IF(self, addr: Address, target: int, truthiness: bool) -> Address:
+    def POP_JUMP_IF(self, addr: Address, target: int, truthiness: bool) -> Union[Address, None]:
         jump_addr = addr.jump()
         end_of_loop = jump_addr.opcode == FOR_ITER or jump_addr[-1].opcode == SETUP_LOOP
         if jump_addr.opcode == FOR_ITER:
@@ -2333,7 +2335,7 @@ class SuiteDecompiler:
     def GET_ITER(self, addr):
         pass
 
-    def FOR_ITER(self, addr, delta):
+    def FOR_ITER(self, addr: Address, delta):
         iterable = self.stack.pop()
         jump_addr = addr.jump()
         d_body = SuiteDecompiler(addr[1], jump_addr[-1])
