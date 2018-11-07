@@ -1877,6 +1877,9 @@ class SuiteDecompiler:
     def IMPORT_FROM(self, addr, namei):
         name = self.code.names[namei]
         self.stack.push(ImportFrom(name))
+        if addr[1].opcode == ROT_TWO:
+            return addr[4]
+
 
     def IMPORT_STAR(self, addr):
         self.POP_TOP(addr)
