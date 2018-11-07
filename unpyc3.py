@@ -2191,9 +2191,6 @@ class SuiteDecompiler:
         cond = self.stack.pop()
         if not addr.is_else_jump():
 
-            # Dictionary comprehension
-            if jump_addr[2] and jump_addr[2].opcode == MAP_ADD:
-                return None
 
             # Handle generator expressions with or clause
             for_iter = addr.seek_back(FOR_ITER)
@@ -2210,9 +2207,12 @@ class SuiteDecompiler:
                         return None
 
             self.push_popjump(truthiness, jump_addr, cond)
+            # Dictionary comprehension
+            if jump_addr.seek_forward(MAP_ADD):
+                return None
 
             # Generator
-            if jump_addr[1] and jump_addr[1].opcode == YIELD_VALUE:
+            if jump_addr.seek_forward(YIELD_VALUE):
                 return None
 
             # Generator
