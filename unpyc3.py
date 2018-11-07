@@ -2335,6 +2335,9 @@ class SuiteDecompiler:
         pass
 
     def FOR_ITER(self, addr: Address, delta):
+        if addr[-1] and addr[-1].opcode == RETURN_VALUE:
+            # Dead code
+            return self.END_NOW
         iterable = self.stack.pop()
         jump_addr = addr.jump()
         d_body = SuiteDecompiler(addr[1], jump_addr[-1])
