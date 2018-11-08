@@ -1548,15 +1548,7 @@ class SuiteDecompiler:
     def SETUP_LOOP(self, addr: Address, delta):
         jump_addr = addr[1] + delta
         end_addr = jump_addr[-1]
-        if end_addr.opcode == JUMP_ABSOLUTE:  # while 1 ???
-            d_body = SuiteDecompiler(addr[1], end_addr)
-            while_stmt = WhileStatement(PyConst(True), d_body.suite)
-            d_body.stack.push(while_stmt)
-            d_body.run()
-            while_stmt.body = d_body.suite
-            self.suite.add_statement(while_stmt)
-            return jump_addr
-        elif end_addr.opcode == POP_BLOCK:  # assume conditional
+        if end_addr.opcode == POP_BLOCK:  # assume conditional
             # scan to first jump
             end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
             if end_cond and end_cond.addr == addr.addr:
@@ -1569,6 +1561,14 @@ class SuiteDecompiler:
                     cond = PyNot(cond)
                 d_body = SuiteDecompiler(end_cond[1], end_addr)
                 while_stmt = WhileStatement(cond, d_body.suite)
+                d_body.stack.push(while_stmt)
+                d_body.run()
+                while_stmt.body = d_body.suite
+                self.suite.add_statement(while_stmt)
+                return jump_addr
+            elif end_cond is None and not self.is_for_loop(addr[1],end_addr):
+                d_body = SuiteDecompiler(addr[1], end_addr)
+                while_stmt = WhileStatement(PyConst(True), d_body.suite)
                 d_body.stack.push(while_stmt)
                 d_body.run()
                 while_stmt.body = d_body.suite
