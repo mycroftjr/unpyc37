@@ -103,7 +103,7 @@ else_jump_opcodes = (
 
 # These opcodes indicate for loop rather than while loop
 for_jump_opcodes = (
-    GET_ITER, FOR_ITER
+    GET_ITER, FOR_ITER, GET_ANEXT
 )
 
 
@@ -1495,6 +1495,19 @@ class SuiteDecompiler:
     def store(self, dest):
         val = self.stack.pop()
         val.store(self, dest)
+
+    def is_for_loop(self, addr, end_addr):
+        i = 0
+        while 1:
+            cur_addr = addr[i]
+            if cur_addr == end_addr:
+                break
+            elif cur_addr.opcode in else_jump_opcodes:
+                break
+            elif cur_addr.opcode in for_jump_opcodes:
+                return True
+            i = i + 1
+        return False
 
     def scan_to_first_jump_if(self, addr, end_addr):
         i = 0
