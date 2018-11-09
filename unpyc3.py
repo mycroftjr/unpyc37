@@ -1551,6 +1551,8 @@ class SuiteDecompiler:
         if end_addr.opcode == POP_BLOCK:  # assume conditional
             # scan to first jump
             end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
+            if end_cond and end_cond[1].opcode == BREAK_LOOP:
+                end_cond = None
             if end_cond and end_cond.addr == addr.addr:
                 # scan for conditional
                 d_cond = SuiteDecompiler(addr[1], end_cond)
@@ -1566,7 +1568,7 @@ class SuiteDecompiler:
                 while_stmt.body = d_body.suite
                 self.suite.add_statement(while_stmt)
                 return jump_addr
-            elif end_cond is None and not self.is_for_loop(addr[1],end_addr):
+            elif not end_cond and not self.is_for_loop(addr[1], end_addr):
                 d_body = SuiteDecompiler(addr[1], end_addr)
                 while_stmt = WhileStatement(PyConst(True), d_body.suite)
                 d_body.stack.push(while_stmt)
