@@ -823,10 +823,10 @@ class PyCallFunction(PyExpr, AwaitableMixin):
                 # Only one pair of brackets arount a single arg genexpr
                 return "{}{}".format(funcstr, arg)
         args = [x.wrap(x.precedence <= 0) for x in self.args]
-        args.extend("{}={}".format(str(k).replace('\'', ''), v.wrap(v.precedence <= 0))
-                    for k, v in self.kwargs)
         if self.varargs is not None:
             args.append("*{}".format(self.varargs))
+        args.extend("{}={}".format(str(k).replace('\'', ''), v.wrap(v.precedence <= 0))
+                    for k, v in self.kwargs)
         if self.varkw is not None:
             args.append("**{}".format(self.varkw))
         return "{}{}({})".format(self.await_prefix, funcstr, ", ".join(args))
