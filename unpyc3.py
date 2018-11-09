@@ -899,12 +899,13 @@ class PyLambda(PyExpr, FunctionDefinition):
             def strip_return(val):
                 return val[len("return "):] if val.startswith('return') else val
 
-            if isinstance(suite[0], IfStatement) and len(suite.statements) == 2:
-                expr = "{} if {} else {}".format(
-                    strip_return(str(suite[0].true_suite)),
-                    str(suite[0].cond),
-                    strip_return(str(suite[1]))
-                )
+            if isinstance(suite[0], IfStatement):
+                    end = suite[1] if len(suite) > 1 else PyConst(None)
+                    expr = "{} if {} else {}".format(
+                        strip_return(str(suite[0].true_suite)),
+                        str(suite[0].cond),
+                        strip_return(str(end))
+                    )
             else:
                 expr = strip_return(str(suite[0]))
         else:
@@ -1213,7 +1214,7 @@ class ForStatement(PyStatement, AsyncMixin):
         self.body.display(indent + 1)
 
     def gen_display(self, seq=()):
-        s = "{}for {} in {}".format(self.async_prefix, self.dest, self.iterable)
+        s = "{}for {} in {}".format(self.async_prefix, self.dest, self.iterable.wrap() if isinstance(self.iterable, PyIfElse) else self.iterable)
         return self.body.gen_display(seq + (s,))
 
 
@@ -1503,13 +1504,16 @@ class SuiteDecompiler:
             if cur_addr == end_addr:
                 break
             elif cur_addr.opcode in else_jump_opcodes:
+                cur_addr = cur_addr.jump()
+                if cur_addr and cur_addr.opcode in for_jump_opcodes:
+                    return True
                 break
             elif cur_addr.opcode in for_jump_opcodes:
                 return True
             i = i + 1
         return False
 
-    def scan_to_first_jump_if(self, addr, end_addr):
+    def scan_to_first_jump_if(self, addr: Address, end_addr: Address) -> Union[Address,None]:
         i = 0
         while 1:
             cur_addr = addr[i]
@@ -1553,7 +1557,7 @@ class SuiteDecompiler:
             end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
             if end_cond and end_cond[1].opcode == BREAK_LOOP:
                 end_cond = None
-            if end_cond and end_cond.addr == addr.addr:
+            if end_cond and end_cond.arg == addr.arg:
                 # scan for conditional
                 d_cond = SuiteDecompiler(addr[1], end_cond)
                 #
@@ -1568,7 +1572,7 @@ class SuiteDecompiler:
                 while_stmt.body = d_body.suite
                 self.suite.add_statement(while_stmt)
                 return jump_addr
-            elif not end_cond and not self.is_for_loop(addr[1], end_addr):
+            elif (not end_cond or not end_cond.jump()[1] == addr.jump()) and not self.is_for_loop(addr[1], end_addr):
                 d_body = SuiteDecompiler(addr[1], end_addr)
                 while_stmt = WhileStatement(PyConst(True), d_body.suite)
                 d_body.stack.push(while_stmt)
