@@ -1723,8 +1723,15 @@ class SuiteDecompiler:
         self.stack.pop().on_pop(self)
 
     def ROT_TWO(self, addr):
-        tos1, tos = self.stack.pop(2)
-        self.stack.push(tos, tos1)
+        # special case: x, y = z, t
+        if addr[2] and addr[1].opcode == STORE_NAME and addr[2].opcode == STORE_NAME:
+            val = PyTuple(self.stack.pop(2))
+            unpack = Unpack(val, 2)
+            self.stack.push(unpack)
+            self.stack.push(unpack)
+        else:
+            tos1, tos = self.stack.pop(2)
+            self.stack.push(tos, tos1)
 
     def ROT_THREE(self, addr):
         tos2, tos1, tos = self.stack.pop(3)
@@ -2054,14 +2061,6 @@ class SuiteDecompiler:
         unpack = Unpack(self.stack.pop(), count, lcount)
         for i in range(count):
             self.stack.push(unpack)
-
-    # special case: x, y = z, t
-
-    # def ROT_TWO(self, addr):
-    #     val = PyTuple(self.stack.pop(2))
-    #     unpack = Unpack(val, 2)
-    #     self.stack.push(unpack)
-    #     self.stack.push(unpack)
 
     # Build operations
 
