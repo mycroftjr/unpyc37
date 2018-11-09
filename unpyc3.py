@@ -319,7 +319,7 @@ class Code:
         self.find_else()
         self.find_jumps()
         trace('================================================')
-        trace(self.code_obj.co_name)
+        trace(self.code_obj)
         trace('================================================')
         for addr in self:
             trace(str(addr))
