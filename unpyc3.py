@@ -2014,6 +2014,10 @@ class SuiteDecompiler:
                 kwarg_dict.items.pop(i)
                 kwvar = k.val
                 break
+            elif not isinstance(k, PyConst):
+                kwvar = kwarg_dict
+                kwarg_dict = PyDict()
+                break
 
         assert isinstance(posargs, PyTuple)
         posvals = posargs.values
