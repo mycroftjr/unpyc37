@@ -900,7 +900,7 @@ class PyLambda(PyExpr, FunctionDefinition):
                 return val[len("return "):] if val.startswith('return') else val
 
             if isinstance(suite[0], IfStatement) and len(suite.statements) == 2:
-                expr = "return {} if {} else {}".format(
+                expr = "{} if {} else {}".format(
                     strip_return(str(suite[0].true_suite)),
                     str(suite[0].cond),
                     strip_return(str(suite[1]))
