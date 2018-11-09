@@ -2243,7 +2243,7 @@ class SuiteDecompiler:
 
             a = addr[1]
             while a and a < jump_addr:
-                if a.opcode == JUMP_FORWARD and a.jump() == jump_addr:
+                if a.opcode in stmt_opcodes:
                     break
                 if a.opcode in pop_jump_if_opcodes and a.arg >= addr.arg:
                     return None
