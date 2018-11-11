@@ -301,6 +301,50 @@ def code_walker(code):
         i += offset
 
 
+class CodeFlags(object):
+    def __init__(self, cf):
+        self.flags = cf
+
+    @property
+    def optimized(self):
+        return self.flags & 0x1
+
+    @property
+    def new_local(self):
+        return self.flags & 0x2
+
+    @property
+    def varargs(self):
+        return self.flags & 0x4
+
+    @property
+    def varkwargs(self):
+        return self.flags & 0x8
+    @property
+    def nested(self):
+        return self.flags & 0x10
+
+    @property
+    def generator(self):
+        return self.flags & 0x20
+
+    @property
+    def no_free(self):
+        return self.flags & 0x40
+
+    @property
+    def coroutine(self):
+        return self.flags & 0x80
+
+    @property
+    def iterable_coroutine(self):
+        return self.flags & 0x100
+
+    @property
+    def async_generator(self):
+        return self.flags & 0x200
+
+
 class Code:
     def __init__(self, code_obj, parent=None):
         self.code_obj = code_obj
@@ -326,6 +370,7 @@ class Code:
             if addr.opcode in stmt_opcodes or addr.opcode in pop_jump_if_opcodes:
                 trace(' ')
         trace('================================================')
+        self.flags: CodeFlags = CodeFlags(code_obj.co_flags)
 
     def __getitem__(self, instr_index):
         if 0 <= instr_index < len(self.instr_seq):
@@ -435,8 +480,6 @@ class Code:
         if name not in self.nonlocals:
             self.nonlocals.append(name)
 
-    def is_coroutine(self):
-        return self.code_obj.co_flags & 0x80 or self.code_obj.co_flags & 0x100
 
 
 class Address:
@@ -524,10 +567,10 @@ class Address:
                 return a
             a = a[increment]
 
-    def seek_back(self, opcode: tuple, end: Address = None) -> Address:
+    def seek_back(self, opcode: Union[tuple,int], end: Address = None) -> Address:
         return self.seek(opcode, -1, end)
 
-    def seek_forward(self, opcode: tuple, end: Address = None) -> Address:
+    def seek_forward(self, opcode: Union[tuple,int], end: Address = None) -> Address:
         return self.seek(opcode, 1, end)
 
 
@@ -1248,7 +1291,7 @@ class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
         FunctionDefinition.__init__(self, code, defaults, kwdefaults, closure, paramobjs, annotations)
         DecorableStatement.__init__(self)
         AsyncMixin.__init__(self)
-        self.is_async = code.is_coroutine()
+        self.is_async = code.flags.coroutine
 
     def display_undecorated(self, indent):
         paramlist = ", ".join(self.getparams())
@@ -1432,7 +1475,7 @@ class SuiteDecompiler:
     def __init__(self, start_addr, end_addr=None, stack=None):
         self.start_addr = start_addr
         self.end_addr = end_addr
-        self.code = start_addr.code
+        self.code: Code = start_addr.code
         self.stack = Stack() if stack is None else stack
         self.suite = Suite()
         self.assignment_chain = []
@@ -1928,7 +1971,10 @@ class SuiteDecompiler:
             if addr[1] is not None:
                 self.write("return")
             return
-        self.write("return {}", value)
+        if self.code.flags.coroutine or self.code.flags.iterable_coroutine:
+            self.write("yield {}", value)
+        else:
+            self.write("return {}", value)
 
     def GET_YIELD_FROM_ITER(self, addr):
         pass
