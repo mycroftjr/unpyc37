@@ -2313,7 +2313,23 @@ class SuiteDecompiler:
         cond = self.pop_popjump()
         end_true = jump_addr[-1]
         if truthiness:
-            cond = PyNot(cond)
+            last_pj = addr.seek_back(pop_jump_if_opcodes)
+            if last_pj and last_pj.arg == addr.arg and isinstance(cond, PyBooleanAnd) or isinstance(cond, PyBooleanOr):
+                cond.right = PyNot(cond.right)
+            else:
+                cond = PyNot(cond)
+
+        if end_true.opcode == RETURN_VALUE:
+            end_false = jump_addr.seek_forward(RETURN_VALUE)
+            if end_false and end_false[2] and end_false[2].opcode == RETURN_VALUE:
+                d_true = SuiteDecompiler(addr[1], end_true[1])
+                d_true.run()
+                d_false = SuiteDecompiler(jump_addr,end_false[1])
+                d_false.run()
+                self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
+
+                return end_false[1]
+
         # - If the true clause ends in return, make sure it's included
         # - If the true clause ends in RAISE_VARARGS, then it's an
         # assert statement. For now I just write it as a raise within
@@ -2412,7 +2428,10 @@ class SuiteDecompiler:
             return self.END_NOW
         iterable = self.stack.pop()
         jump_addr = addr.jump()
-        d_body = SuiteDecompiler(addr[1], jump_addr[-1])
+        end_body = jump_addr
+        if end_body.opcode != POP_BLOCK:
+            end_body = end_body[-1]
+        d_body = SuiteDecompiler(addr[1], end_body)
         for_stmt = ForStatement(iterable)
         d_body.stack.push(for_stmt)
         d_body.run()
