@@ -1745,7 +1745,7 @@ class SuiteDecompiler:
                 except_end = addr[5].jump()
             else:
                 except_start = addr[5]
-                except_end = left.next_start_except[-1]
+                except_end = left.next_start_except
             d_body = SuiteDecompiler(except_start, except_end)
             d_body.run()
             left.add_except_clause(right, d_body.suite)
