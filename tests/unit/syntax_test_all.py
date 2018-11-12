@@ -13,5 +13,4 @@ class DecompileTestAll(unittest.TestCase):
 test_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'test_cases'
 )
-for tp in make_tests_from_folder(test_dir, (DecompileTestAll,)):
-    globals()[tp.__name__] = tp
+make_tests_from_folder(test_dir, DecompileTestAll)

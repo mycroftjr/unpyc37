@@ -52,7 +52,7 @@ def make_roundtrip_test(fp,use_trace=True):
     return test_dec
 
 
-def make_tests_from_folder(test_dir, test_base_classes):
+def make_tests_from_folder(test_dir, test_class):
     tps = []
     for root, dirs, files in os.walk(test_dir):
         for filename in fnmatch.filter(files, '*.py'):
@@ -61,14 +61,13 @@ def make_tests_from_folder(test_dir, test_base_classes):
                 continue
             test = make_roundtrip_test(full_path)
             test_name = filename.replace('.py', '')
+            r = list(filter(None, root.replace(test_dir, '').split(os.sep)))
             prefix = 'test_'
+            if any(r):
+                test_name = str.join('_', r) + '_' + test_name
             if not test_name[:len(prefix)] == prefix:
                 test_name = prefix + test_name
-            tp_name = filename.replace('.py', '') + '_tests'
-            tp = type(tp_name, test_base_classes, {})
-            setattr(tp, test_name, test)
-            tps.append(tp)
-    return tps
+            setattr(test_class,test_name,test)
 
 
 def make_decompile_test(full_path,trace_failure=True):
