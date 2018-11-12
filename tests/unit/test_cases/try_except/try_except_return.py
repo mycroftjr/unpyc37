@@ -1,9 +1,6 @@
 
-def a():
+def f():
     try:
         print(a)
-    except:
-        print(b)
-        return
-    print(c)
-    print(d)
+    except KeyError:
+        return 1
