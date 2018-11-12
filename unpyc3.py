@@ -1923,9 +1923,13 @@ class SuiteDecompiler:
         self.write("del {}[{}]", expr, sub)
 
     # CONST
-
+    CONST_LITERALS = {
+        Ellipsis: PyName('...')
+    }
     def LOAD_CONST(self, addr, consti):
         const = self.code.consts[consti]
+        if const.val in self.CONST_LITERALS:
+            const = self.CONST_LITERALS[const.val]
         self.stack.push(const)
 
     #
