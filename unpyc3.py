@@ -1481,13 +1481,13 @@ class SuiteDecompiler:
         self.assignment_chain = []
         self.popjump_stack = []
 
-    def push_popjump(self, jtruthiness, jaddr, jcond):
+    def push_popjump(self, jtruthiness, jaddr, jcond,original_jaddr):
         stack = self.popjump_stack
         if jaddr and jaddr[-1].is_else_jump():
             # Increase jaddr to the 'else' address if it jumps to the 'then'
             jaddr = jaddr[-1].jump()
         while stack:
-            truthiness, addr, cond = stack[-1]
+            truthiness, addr, cond,original_addr = stack[-1]
             # if jaddr == None:
             #     raise Exception("#ERROR: jaddr is None")
             # jaddr == None \
@@ -1495,16 +1495,35 @@ class SuiteDecompiler:
                 break
             stack.pop()
             obj_maker = PyBooleanOr if truthiness else PyBooleanAnd
+            if truthiness and jtruthiness:
+                if original_jaddr.arg == original_addr.arg:
+                    obj_maker = PyBooleanAnd
+                    cond = PyNot(cond)
+                    jcond = PyNot(jcond)
+                elif original_jaddr.arg > original_addr.arg:
+                    obj_maker = PyBooleanOr
+                    jcond = PyNot(jcond)
+            if not truthiness and not jtruthiness:
+                if original_jaddr.arg < original_addr.arg:
+                    obj_maker = PyBooleanOr
+                    cond = PyNot(cond)
+                elif original_jaddr.arg > original_addr.arg:
+                    obj_maker = PyBooleanOr
+                    cond = PyNot(cond)
+            if truthiness and not jtruthiness:
+                if original_jaddr.arg == original_addr.arg:
+                    obj_maker = PyBooleanAnd
+                    cond = PyNot(cond)
             if isinstance(jcond, obj_maker):
                 # Use associativity of 'and' and 'or' to minimise the
                 # number of parentheses
                 jcond = obj_maker(obj_maker(cond, jcond.left), jcond.right)
             else:
                 jcond = obj_maker(cond, jcond)
-        stack.append((jtruthiness, jaddr, jcond))
+        stack.append((jtruthiness, jaddr, jcond,original_jaddr))
 
     def pop_popjump(self):
-        truthiness, addr, cond = self.popjump_stack.pop()
+        truthiness, addr, cond,original_addr = self.popjump_stack.pop()
         return cond
 
     def run(self):
@@ -2192,7 +2211,7 @@ class SuiteDecompiler:
 
     def JUMP_IF_FALSE_OR_POP(self, addr, target):
         end_addr = addr.jump()
-        self.push_popjump(True, end_addr, self.stack.pop())
+        self.push_popjump(True, end_addr, self.stack.pop(),addr)
         left = self.pop_popjump()
         if end_addr.opcode == ROT_TWO:
             opc, arg = end_addr[-1]
@@ -2237,7 +2256,7 @@ class SuiteDecompiler:
 
     def JUMP_IF_TRUE_OR_POP(self, addr, target):
         end_addr = addr.jump()
-        self.push_popjump(True, end_addr, self.stack.pop())
+        self.push_popjump(True, end_addr, self.stack.pop(),addr)
         left = self.pop_popjump()
         d = SuiteDecompiler(addr[1], end_addr, self.stack)
         d.run()
@@ -2275,10 +2294,10 @@ class SuiteDecompiler:
                             truthiness = not truthiness
                             if truthiness:
                                 cond = PyNot(cond)
-                        self.push_popjump(truthiness, jump_addr, cond)
+                        self.push_popjump(truthiness, jump_addr, cond,addr)
                         return None
 
-            self.push_popjump(truthiness, jump_addr, cond)
+            self.push_popjump(truthiness, jump_addr, cond, addr)
             # Dictionary comprehension
             if jump_addr.seek_forward(MAP_ADD):
                 return None
@@ -2309,13 +2328,14 @@ class SuiteDecompiler:
             self.suite.add_statement(stmt)
             return end_true
         # Increase jump_addr to pop all previous jumps
-        self.push_popjump(truthiness, jump_addr[1], cond)
+        self.push_popjump(truthiness, jump_addr[1], cond,addr)
         cond = self.pop_popjump()
         end_true = jump_addr[-1]
         if truthiness:
             last_pj = addr.seek_back(pop_jump_if_opcodes)
             if last_pj and last_pj.arg == addr.arg and isinstance(cond, PyBooleanAnd) or isinstance(cond, PyBooleanOr):
-                cond.right = PyNot(cond.right)
+                if last_pj.opcode != addr.opcode:
+                    cond.right = PyNot(cond.right)
             else:
                 cond = PyNot(cond)
 

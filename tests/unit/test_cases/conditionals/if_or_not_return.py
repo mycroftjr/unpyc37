@@ -1,5 +1,5 @@
 
 def f():
-    if a or not b is None:
+    if a or b is not None:
         return
     return c
