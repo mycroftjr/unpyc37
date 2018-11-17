@@ -629,8 +629,12 @@ class PyConst(PyExpr):
 
 
 class PyFormatValue(PyConst):
+    def __init__(self, val):
+        super().__init__(val)
+        self.formatter = ''
+
     def __str__(self):
-        return f'{{{self.val}}}'
+        return f'{{{self.val}{self.formatter}}}'
 
 
 class PyFormatString(PyExpr):
@@ -2564,8 +2568,19 @@ class SuiteDecompiler:
 
     # Formatted string literals
     def FORMAT_VALUE(self, addr, flags):
+        formatter = ''
+        if flags == 1:
+            formatter = '!s'
+        elif flags == 2:
+            formatter = '!r'
+        elif flags == 3:
+            formatter = '!a'
+        elif flags == 4:
+            formatter = f':{self.stack.pop().val}'
         val = self.stack.pop()
-        self.stack.push(PyFormatValue(val))
+        f = PyFormatValue(val)
+        f.formatter = formatter
+        self.stack.push(f)
 
     def BUILD_STRING(self, addr, c):
         params = self.stack.pop(c)
