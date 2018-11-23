@@ -499,7 +499,7 @@ class Address:
     def __str__(self):
         mark = "* " if self in self.code.else_jumps else "  "
         jump = self.jump()
-        jt = '>>' if self.is_jump_target() else '  '
+        jt = '>>' if self.is_jump_target else '  '
         arg = self.arg or "  "
         jdest = '\t(to {})'.format(jump.addr) if jump and jump.addr != self.arg else ''
         val = ''
@@ -542,9 +542,11 @@ class Address:
     def __hash__(self):
         return hash((self.code, self.index))
 
+    @property
     def is_else_jump(self):
         return self in self.code.else_jumps
 
+    @property
     def is_jump_target(self):
         return self in self.code.jump_targets
 
@@ -1487,7 +1489,7 @@ class SuiteDecompiler:
 
     def push_popjump(self, jtruthiness, jaddr, jcond,original_jaddr):
         stack = self.popjump_stack
-        if jaddr and jaddr[-1].is_else_jump():
+        if jaddr and jaddr[-1].is_else_jump:
             # Increase jaddr to the 'else' address if it jumps to the 'then'
             jaddr = jaddr[-1].jump()
         while stack:
@@ -2299,9 +2301,9 @@ class SuiteDecompiler:
             # We are in a while-loop with nothing after the if-suite
             jump_addr = jump_addr[-1].jump()[-1]
         cond = self.stack.pop()
-        if not addr.is_else_jump():
 
 
+        if not addr.is_else_jump:
             # Handle generator expressions with or clause
             for_iter = addr.seek_back(FOR_ITER)
             if for_iter:
