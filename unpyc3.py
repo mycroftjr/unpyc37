@@ -22,7 +22,7 @@ def foo(x, y, z=3, *args):
 """
 from __future__ import annotations
 
-from typing import Union
+from typing import Union, Iterable
 
 __all__ = ['decompile']
 
@@ -138,7 +138,7 @@ def read_code(stream):
             return marshal.load(stream)
 
 
-def dec_module(path):
+def dec_module(path) -> Suite:
     if path.endswith(".py"):
         if sys.version_info < (3, 6):
             import imp
@@ -154,7 +154,7 @@ def dec_module(path):
         return code.get_suite(include_declarations=False, look_for_docstring=True)
 
 
-def decompile(obj):
+def decompile(obj) -> Union[Suite, PyStatement]:
     """
     Decompile obj if it is a module object, a function or a
     code object. If obj is a string, it is assumed to be the path
@@ -567,10 +567,10 @@ class Address:
                 return a
             a = a[increment]
 
-    def seek_back(self, opcode: Union[tuple,int], end: Address = None) -> Address:
+    def seek_back(self, opcode: Union[Iterable, int], end: Address = None) -> Address:
         return self.seek(opcode, -1, end)
 
-    def seek_forward(self, opcode: Union[tuple,int], end: Address = None) -> Address:
+    def seek_forward(self, opcode: Union[Iterable, int], end: Address = None) -> Address:
         return self.seek(opcode, 1, end)
 
 
@@ -1435,16 +1435,16 @@ class Suite:
     def __init__(self):
         self.statements = []
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.statements)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.statements)
 
-    def __getitem__(self, i):
+    def __getitem__(self, i) -> PyStatement:
         return self.statements[i]
 
-    def __setitem__(self, i, val):
+    def __setitem__(self, i, val: PyStatement):
         self.statements[i] = val
 
     def __str__(self):
