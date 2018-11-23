@@ -1529,6 +1529,8 @@ class SuiteDecompiler:
         stack.append((jtruthiness, jaddr, jcond,original_jaddr))
 
     def pop_popjump(self):
+        if not self.popjump_stack:
+            raise Exception('Attempted to pop an empty popjump stack.')
         truthiness, addr, cond,original_addr = self.popjump_stack.pop()
         return cond
 
