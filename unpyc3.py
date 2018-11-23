@@ -2197,7 +2197,7 @@ class SuiteDecompiler:
             if isinstance(o, PyDict):
                 for item in o.items:
                     k, v = item
-                    d.set_item(PyConst(k.val), v)
+                    d.set_item(PyConst(k.val if isinstance(k,PyConst) else k.name), v)
             else:
                 d.set_item(PyConst(o), PyConst('**KWARG**'))
         self.stack.push(d)
