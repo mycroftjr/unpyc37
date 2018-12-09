@@ -2303,7 +2303,26 @@ class SuiteDecompiler:
             # We are in a while-loop with nothing after the if-suite
             jump_addr = jump_addr[-1].jump()[-1]
         cond = self.stack.pop()
+        # chained compare
+        # ex:
+        # if x <= y <= z:
+        if addr[-3] and \
+                addr[-1].opcode == COMPARE_OP and \
+                addr[-2].opcode == ROT_THREE and \
+                addr[-3].opcode == DUP_TOP:
+            if self.popjump_stack:
+                c = self.pop_popjump()
+                c = c.chain(cond)
+                self.push_popjump(not truthiness, jump_addr, c, addr)
+            else:
+                self.push_popjump(not truthiness, jump_addr, cond, addr)
+            return
 
+        is_chained = isinstance(cond, PyCompare) and addr.seek_back(ROT_THREE, addr.seek_back(stmt_opcodes))
+        if is_chained and self.popjump_stack:
+            pj = self.pop_popjump()
+            if isinstance(pj, PyCompare):
+                cond = pj.chain(cond)
 
         if not addr.is_else_jump:
             # Handle generator expressions with or clause
