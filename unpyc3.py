@@ -1620,14 +1620,18 @@ class SuiteDecompiler:
     #
 
     def SETUP_LOOP(self, addr: Address, delta):
-        jump_addr = addr[1] + delta
+        jump_addr = addr.jump()
         end_addr = jump_addr[-1]
         if end_addr.opcode == POP_BLOCK:  # assume conditional
             # scan to first jump
             end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
+            end_jump = None if not end_cond else end_cond.jump()
+            if end_jump and end_jump.opcode == POP_BLOCK:
+                end_jump = end_jump[1]
+
             if end_cond and end_cond[1].opcode == BREAK_LOOP:
                 end_cond = None
-            if end_cond and end_cond.arg == addr.arg:
+            if end_cond and end_jump == jump_addr:
                 # scan for conditional
                 d_cond = SuiteDecompiler(addr[1], end_cond)
                 #
