@@ -1,5 +1,7 @@
 import compileall
+import dis
 import io
+import marshal
 import os
 import fnmatch
 import unpyc3
@@ -81,14 +83,10 @@ def make_decompile_test(full_path,trace_failure=True):
                 f.write(result_src)
             co = compile(result_src,'<string>','exec')
         except Exception as ae:
-            if not unpyc3.get_trace() and trace_failure:
-                try:
-                    unpyc3.set_trace(print)
-                    unpyc3.decompile(full_path)
-                except Exception:
-                    pass
-                finally:
-                    unpyc3.set_trace(None)
+
+            with io.open(full_path, 'rb') as x:
+                x.read(16)
+                dis.dis(marshal.load(x))
 
             raise ae
 
