@@ -610,7 +610,7 @@ class PyExpr:
             dec.suite.add_statement(AssignStatement(chain))
             dec.assignment_chain = []
 
-    def on_pop(self, dec):
+    def on_pop(self, dec : SuiteDecompiler):
         dec.write(str(self))
 
 
@@ -635,9 +635,15 @@ class PyFormatValue(PyConst):
         super().__init__(val)
         self.formatter = ''
 
-    def __str__(self):
+    @staticmethod
+    def fmt(string):
+        return f'f\'{string}\''
+
+    def base(self):
         return f'{{{self.val}{self.formatter}}}'
 
+    def __str__(self):
+        return self.fmt(self.base())
 
 class PyFormatString(PyExpr):
     precedence = 100
@@ -647,7 +653,7 @@ class PyFormatString(PyExpr):
         self.params = params
 
     def __str__(self):
-        return "f'{}'".format(''.join([str(p) if isinstance(p, PyFormatValue) else str(p.val) for p in self.params]))
+        return "f'{}'".format(''.join([p.base() if isinstance(p, PyFormatValue) else str(p.val) for p in self.params]))
 
 
 class PyTuple(PyExpr):
