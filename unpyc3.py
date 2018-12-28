@@ -2365,13 +2365,15 @@ class SuiteDecompiler:
             if jump_addr.opcode != END_FINALLY and jump_addr[1] and jump_addr[1].opcode == JUMP_ABSOLUTE:
                 return None
 
-            a = addr[1]
-            while a and a < jump_addr:
-                if a.opcode in stmt_opcodes:
+            next_addr = addr[1]
+            while next_addr and next_addr < jump_addr:
+                if next_addr.opcode in stmt_opcodes:
                     break
-                if a.opcode in pop_jump_if_opcodes and a.arg >= addr.arg:
-                    return None
-                a = a[1]
+                if next_addr.opcode in pop_jump_if_opcodes:
+                    next_jump_addr = next_addr.jump()
+                    if next_jump_addr > jump_addr or (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes):
+                        return None
+                next_addr = next_addr[1]
             # if there are no nested conditionals and no else clause, write the true portion and jump ahead to the end of the conditional
             cond = self.pop_popjump()
             end_true = jump_addr
