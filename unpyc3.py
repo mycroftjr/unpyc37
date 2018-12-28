@@ -1483,7 +1483,7 @@ class SuiteDecompiler:
         self.end_addr = end_addr
         self.code: Code = start_addr.code
         self.stack = Stack() if stack is None else stack
-        self.suite = Suite()
+        self.suite: Suite = Suite()
         self.assignment_chain = []
         self.popjump_stack = []
 
@@ -1663,13 +1663,16 @@ class SuiteDecompiler:
         self.write("continue")
 
     def SETUP_FINALLY(self, addr, delta):
-        start_finally = addr.jump()
+        start_finally: Address = addr.jump()
         d_try = SuiteDecompiler(addr[1], start_finally)
         d_try.run()
         d_finally = SuiteDecompiler(start_finally)
         end_finally = d_finally.run()
         self.suite.add_statement(FinallyStatement(d_try.suite, d_finally.suite))
-        return end_finally[1]
+        if end_finally:
+            return end_finally[1]
+        else:
+            return self.END_NOW
 
     def END_FINALLY(self, addr):
         return self.END_NOW
