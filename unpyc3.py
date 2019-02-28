@@ -653,7 +653,11 @@ class PyFormatString(PyExpr):
         self.params = params
 
     def __str__(self):
-        return "f'{}'".format(''.join([p.base() if isinstance(p, PyFormatValue) else str(p.val) for p in self.params]))
+        return "f'{}'".format(''.join([
+            p.base() if isinstance(p, PyFormatValue) else
+                str(p.val.encode('utf-8'))[1:].replace('\'', '')
+            for p in self.params])
+        )
 
 
 class PyTuple(PyExpr):
