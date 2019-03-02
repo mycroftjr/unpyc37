@@ -1204,7 +1204,8 @@ class ImportStatement(PyStatement):
                     names.append(name)
                 else:
                     names.append("{} as {}".format(name, alias))
-            indent.write("from {} import {}", self.name, ", ".join(names))
+            indent.write("from {}{} import {}", ''.join(['.' for i in range(self.level.val)]), self.name,
+                         ", ".join(names))
 
 
 class ImportFrom:
