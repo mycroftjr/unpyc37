@@ -723,8 +723,8 @@ class PyDict(PyExpr):
         self.items.append((key, val))
 
     def __str__(self):
-        itemstr = ", ".join("{}: {}".format(*kv) for kv in self.items)
-        return "{{{}}}".format(itemstr)
+        itemstr = ", ".join(f"{kv[0]}: {kv[1]}" if len(kv) ==2 else str(kv[0]) for kv in self.items)
+        return f"{{{itemstr}}}"
 
 
 class PyName(PyExpr):
@@ -2182,6 +2182,16 @@ class SuiteDecompiler:
         values.reverse()
         self.stack.push(PyTuple(values))
 
+    def BUILD_TUPLE_UNPACK(self, addr, count):
+        values = []
+        for o in self.stack.pop(count):
+            if isinstance(o, PyTuple):
+                values.extend(o.values)
+            else:
+                values.append(PyStarred(o))
+
+        self.stack.push(PyTuple(values))
+
     def BUILD_TUPLE_UNPACK_WITH_CALL(self, addr, count):
         values = []
         for o in self.stack.pop(count):
@@ -2197,9 +2207,29 @@ class SuiteDecompiler:
         values.reverse()
         self.stack.push(PyList(values))
 
+    def BUILD_LIST_UNPACK(self, addr, count):
+        values = []
+        for o in self.stack.pop(count):
+            if isinstance(o, PyTuple):
+                values.extend(o.values)
+            else:
+                values.append(PyStarred(o))
+
+        self.stack.push(PyList(values))
+
     def BUILD_SET(self, addr, count):
         values = [self.stack.pop() for i in range(count)]
         values.reverse()
+        self.stack.push(PySet(values))
+
+    def BUILD_SET_UNPACK(self, addr, count):
+        values = []
+        for o in self.stack.pop(count):
+            if isinstance(o, PySet):
+                values.extend(o.values)
+            else:
+                values.append(PyStarred(o))
+
         self.stack.push(PySet(values))
 
     def BUILD_MAP(self, addr, count):
@@ -2207,6 +2237,19 @@ class SuiteDecompiler:
         if sys.version_info >= (3, 5):
             for i in range(count):
                 d.items.append(tuple(self.stack.pop(2)))
+        self.stack.push(d)
+
+    def BUILD_MAP_UNPACK(self, addr, count):
+        d = PyDict()
+        for i in range(count):
+            o = self.stack.pop()
+            if isinstance(o, PyDict):
+                for item in reversed(o.items):
+                    k, v = item
+                    d.set_item(PyConst(k.val if isinstance(k, PyConst) else k.name), v)
+            else:
+                d.items.append((PyStarred(PyStarred(o)),))
+        d.items = list(reversed(d.items))
         self.stack.push(d)
 
     def BUILD_MAP_UNPACK_WITH_CALL(self, addr, count):
