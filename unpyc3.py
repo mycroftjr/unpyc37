@@ -2058,6 +2058,10 @@ class SuiteDecompiler:
         self.stack.push(PyYieldFrom(value))
 
     def CALL_FUNCTION_CORE(self, func, posargs, kwargs, varargs, varkw):
+        if any(filter(lambda x: '.' in str(x[0]), kwargs)):
+            varkw = PyDict()
+            varkw.items = kwargs
+            kwargs = []
         if func is self.BUILD_CLASS:
             # It's a class construction
             # TODO: check the assert statement below is correct
