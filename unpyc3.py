@@ -961,6 +961,9 @@ class PyLambda(PyExpr, FunctionDefinition):
             def strip_return(val):
                 return val[len("return "):] if val.startswith('return') else val
 
+            def strip_yield_none(val):
+                return '(yield)' if val == 'yield None' else val
+
             if isinstance(suite[0], IfStatement):
                     end = suite[1] if len(suite) > 1 else PyConst(None)
                     expr = "{} if {} else {}".format(
@@ -970,6 +973,7 @@ class PyLambda(PyExpr, FunctionDefinition):
                     )
             else:
                 expr = strip_return(str(suite[0]))
+                expr = strip_yield_none(expr)
         else:
             expr = "None"
         return "lambda {}: {}".format(params, expr)
