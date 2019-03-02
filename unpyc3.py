@@ -615,10 +615,13 @@ class PyExpr:
 
 
 class PyConst(PyExpr):
-    precedence = 100
 
     def __init__(self, val):
         self.val = val
+        if isinstance(val, int):
+            self.precedence=14
+        else:
+            self.precedence = 100
 
     def __str__(self):
         return repr(self.val)
