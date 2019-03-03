@@ -22,7 +22,7 @@ def foo(x, y, z=3, *args):
 """
 from __future__ import annotations
 
-from typing import Union, Iterable
+from typing import Union, Iterable, Any, List
 
 __all__ = ['decompile']
 
@@ -1347,11 +1347,12 @@ class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
 
 class TryStatement(PyStatement):
     def __init__(self, try_suite):
-        self.try_suite = try_suite
-        self.except_clauses = []
+        self.try_suite: Suite = try_suite
+        self.except_clauses: List[Any, str, Suite] = []
+        self.else_suite: Suite = None
 
-    def add_except_clause(self, type, suite):
-        self.except_clauses.append([type, None, suite])
+    def add_except_clause(self, exception_type, suite):
+        self.except_clauses.append([exception_type, None, suite])
 
     def store(self, dec, dest):
         self.except_clauses[-1][1] = dest
@@ -1367,6 +1368,9 @@ class TryStatement(PyStatement):
             else:
                 indent.write("except {} as {}:", type, name)
             suite.display(indent + 1)
+        if self.else_suite:
+            indent.write('else:')
+            self.else_suite.display(indent + 1)
 
 
 class FinallyStatement(PyStatement):
@@ -1706,6 +1710,7 @@ class SuiteDecompiler:
         return self.END_NOW
 
     def SETUP_EXCEPT(self, addr, delta):
+        end_addr = addr
         start_except = addr.jump()
         start_try = addr[1]
         end_try = start_except
@@ -1720,6 +1725,7 @@ class SuiteDecompiler:
         d_try.run()
 
         stmt = TryStatement(d_try.suite)
+        j_except: Address = None
         while start_except.opcode != END_FINALLY:
             if start_except.opcode == DUP_TOP:
                 # There's a new except clause
@@ -1727,6 +1733,8 @@ class SuiteDecompiler:
                 d_except.stack.push(stmt)
                 d_except.run()
                 start_except = stmt.next_start_except
+                j_except = start_except[-1]
+                end_addr = start_except[1]
             elif start_except.opcode == POP_TOP:
                 # It's a bare except clause - it starts:
                 # POP_TOP
@@ -1754,8 +1762,20 @@ class SuiteDecompiler:
                 stmt.add_except_clause(None, d_except.suite)
                 start_except = end_except[2]
                 assert start_except.opcode == END_FINALLY
+
+                end_addr = start_except[1]
+                j_except: Address = end_except[1]
+        if j_except and j_except.opcode == JUMP_FORWARD:
+            j_next = j_except.jump()
+            if j_next != end_addr:
+                start_else = end_addr
+                end_else = j_next
+                d_else = SuiteDecompiler(start_else, end_else)
+                d_else.run()
+                stmt.else_suite = d_else.suite
+                end_addr = end_else
         self.suite.add_statement(stmt)
-        return start_except[1]
+        return end_addr
 
     def SETUP_WITH(self, addr, delta):
         end_with = addr.jump()
