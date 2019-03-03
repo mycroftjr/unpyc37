@@ -2496,6 +2496,8 @@ class SuiteDecompiler:
             d_true.run()
             self.suite.add_statement(IfStatement(cond, d_true.suite, Suite()))
             return jump_addr
+        if is_chained and addr[1].opcode == JUMP_ABSOLUTE:
+            end_true = end_true[-2]
         d_true = SuiteDecompiler(addr[1], end_true)
         d_true.run()
         if addr[1].opcode == JUMP_ABSOLUTE:
