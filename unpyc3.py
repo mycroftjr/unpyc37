@@ -2376,6 +2376,10 @@ class SuiteDecompiler:
 
     def POP_JUMP_IF(self, addr: Address, target: int, truthiness: bool) -> Union[Address, None]:
         jump_addr = addr.jump()
+
+        last_loop = addr.seek_back(SETUP_LOOP)
+        in_loop = last_loop and last_loop.jump() > addr
+
         end_of_loop = jump_addr.opcode == FOR_ITER or jump_addr[-1].opcode == SETUP_LOOP
         if jump_addr.opcode == FOR_ITER:
             # We are in a for-loop with nothing after the if-suite
@@ -2494,6 +2498,17 @@ class SuiteDecompiler:
             return jump_addr
         d_true = SuiteDecompiler(addr[1], end_true)
         d_true.run()
+        if addr[1].opcode == JUMP_ABSOLUTE:
+            j = addr[1].jump()
+            l = last_loop[1]
+            while l.opcode not in stmt_opcodes:
+                if l == j:
+                    d_true.suite.add_statement(SimpleStatement('continue'))
+
+                    self.suite.add_statement(IfStatement(cond, d_true.suite, None))
+                    return addr[2]
+                l = l[1]
+
         if jump_addr.opcode == POP_BLOCK and not end_of_loop:
             # It's a while loop
             stmt = WhileStatement(cond, d_true.suite)
