@@ -1648,7 +1648,7 @@ class SuiteDecompiler:
         jump_addr = addr.jump()
         end_addr = jump_addr[-1]
 
-            end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
+        end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
         if end_addr.opcode in (POP_BLOCK,POP_TOP) or not end_cond or end_addr.seek_back(else_jump_opcodes,end_addr.seek_back(stmt_opcodes)):  # assume conditional
             # scan to first jump
             end_jump = None if not end_cond else end_cond.jump()
