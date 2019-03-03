@@ -659,7 +659,7 @@ class PyFormatString(PyExpr):
         return "f'{}'".format(''.join([
             p.base().replace('\'', '\"') if isinstance(p, PyFormatValue) else
             p.name if isinstance(p, PyName) else
-                str(p.val.encode('utf-8'))[1:].replace('\'', '')
+            str(p.val.encode('utf-8'))[1:].replace('\'', '')
             for p in self.params])
         )
 
@@ -727,7 +727,7 @@ class PyDict(PyExpr):
         self.items.append((key, val))
 
     def __str__(self):
-        itemstr = ", ".join(f"{kv[0]}: {kv[1]}" if len(kv) ==2 else str(kv[0]) for kv in self.items)
+        itemstr = ", ".join(f"{kv[0]}: {kv[1]}" if len(kv) == 2 else str(kv[0]) for kv in self.items)
         return f"{{{itemstr}}}"
 
 
@@ -880,8 +880,8 @@ class PyCallFunction(PyExpr, AwaitableMixin):
         self.func = func
         self.args = args
         self.kwargs = kwargs
-        self.varargs = varargs
-        self.varkw = varkw
+        self.varargs = varargs if not varargs or isinstance(varargs,Iterable) else {varargs}
+        self.varkw = varkw if not varkw or isinstance(varkw,Iterable) else {varkw}
 
     def __str__(self):
         funcstr = self.func.wrap(self.func.precedence < self.precedence)
@@ -893,11 +893,13 @@ class PyCallFunction(PyExpr, AwaitableMixin):
                 return "{}{}".format(funcstr, arg)
         args = [x.wrap(x.precedence <= 0) for x in self.args]
         if self.varargs is not None:
-            args.append("*{}".format(self.varargs))
+            for varargs in self.varargs:
+                args.append("*{}".format(varargs))
         args.extend("{}={}".format(str(k).replace('\'', ''), v.wrap(v.precedence <= 0))
                     for k, v in self.kwargs)
         if self.varkw is not None:
-            args.append("**{}".format(self.varkw))
+            for varkw in self.varkw:
+                args.append("**{}".format(varkw))
         return "{}{}({})".format(self.await_prefix, funcstr, ", ".join(args))
 
 
@@ -972,12 +974,12 @@ class PyLambda(PyExpr, FunctionDefinition):
                 return '(yield)' if val == 'yield None' else val
 
             if isinstance(suite[0], IfStatement):
-                    end = suite[1] if len(suite) > 1 else PyConst(None)
-                    expr = "{} if {} else {}".format(
-                        strip_return(str(suite[0].true_suite)),
-                        str(suite[0].cond),
-                        strip_return(str(end))
-                    )
+                end = suite[1] if len(suite) > 1 else PyConst(None)
+                expr = "{} if {} else {}".format(
+                    strip_return(str(suite[0].true_suite)),
+                    str(suite[0].cond),
+                    strip_return(str(end))
+                )
             else:
                 expr = strip_return(str(suite[0]))
                 expr = strip_yield_none(expr)
@@ -1512,13 +1514,13 @@ class SuiteDecompiler:
         self.assignment_chain = []
         self.popjump_stack = []
 
-    def push_popjump(self, jtruthiness, jaddr, jcond,original_jaddr):
+    def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr):
         stack = self.popjump_stack
         if jaddr and jaddr[-1].is_else_jump:
             # Increase jaddr to the 'else' address if it jumps to the 'then'
             jaddr = jaddr[-1].jump()
         while stack:
-            truthiness, addr, cond,original_addr = stack[-1]
+            truthiness, addr, cond, original_addr = stack[-1]
             # if jaddr == None:
             #     raise Exception("#ERROR: jaddr is None")
             # jaddr == None \
@@ -1551,12 +1553,12 @@ class SuiteDecompiler:
                 jcond = obj_maker(obj_maker(cond, jcond.left), jcond.right)
             else:
                 jcond = obj_maker(cond, jcond)
-        stack.append((jtruthiness, jaddr, jcond,original_jaddr))
+        stack.append((jtruthiness, jaddr, jcond, original_jaddr))
 
     def pop_popjump(self):
         if not self.popjump_stack:
             raise Exception('Attempted to pop an empty popjump stack.')
-        truthiness, addr, cond,original_addr = self.popjump_stack.pop()
+        truthiness, addr, cond, original_addr = self.popjump_stack.pop()
         return cond
 
     def run(self):
@@ -1608,7 +1610,7 @@ class SuiteDecompiler:
             i = i + 1
         return False
 
-    def scan_to_first_jump_if(self, addr: Address, end_addr: Address) -> Union[Address,None]:
+    def scan_to_first_jump_if(self, addr: Address, end_addr: Address) -> Union[Address, None]:
         i = 0
         while 1:
             cur_addr = addr[i]
@@ -2070,10 +2072,6 @@ class SuiteDecompiler:
         self.stack.push(PyYieldFrom(value))
 
     def CALL_FUNCTION_CORE(self, func, posargs, kwargs, varargs, varkw):
-        if any(filter(lambda x: '.' in str(x[0]), kwargs)):
-            varkw = PyDict()
-            varkw.items = kwargs
-            kwargs = []
         if func is self.BUILD_CLASS:
             # It's a class construction
             # TODO: check the assert statement below is correct
@@ -2130,48 +2128,44 @@ class SuiteDecompiler:
             self.CALL_FUNCTION(addr, argc, have_kw=True)
 
     def CALL_FUNCTION_EX(self, addr, flags):
-        kwarg_dict = PyDict()
+        kwarg_unpacks = []
         if flags & 1:
-            kwarg_dict = self.stack.pop()
-        posargs = self.stack.pop()
-        func = self.stack.pop()
-        kwvar = None
-        posvar = None
+            kwarg_unpacks = self.stack.pop()
 
-        if not isinstance(posargs, PyTuple):
-            posvar = posargs
-            posargs = PyTuple([])
+        kwarg_dict = PyDict()
+        if isinstance(kwarg_unpacks,PyDict):
+            kwarg_dict = kwarg_unpacks
+            kwarg_unpacks = []
+        elif isinstance(kwarg_unpacks, list):
+            if len(kwarg_unpacks):
+                if isinstance(kwarg_unpacks[0], PyDict):
+                    kwarg_dict = kwarg_unpacks[0]
+                    kwarg_unpacks = kwarg_unpacks[1:]
+        else:
+            kwarg_unpacks = [kwarg_unpacks]
 
-        if not isinstance(kwarg_dict, PyDict):
-            kwvar = kwarg_dict
+        if any(filter(lambda kv: '.' in str(kv[0]), kwarg_dict.items)):
+            kwarg_unpacks.append(kwarg_dict)
             kwarg_dict = PyDict()
 
-        if not posargs:
-            posargs = PyTuple([])
+        posargs_unpacks = self.stack.pop()
+        posargs = PyTuple([])
+        if isinstance(posargs_unpacks,PyTuple):
+            posargs = posargs_unpacks
+            posargs_unpacks = []
+        elif isinstance(posargs_unpacks, list):
+            if len(posargs_unpacks) > 0:
+                posargs = posargs_unpacks[0]
+                if isinstance(posargs, PyConst):
+                    posargs = PyTuple([PyConst(a) for a in posargs.val])
+                elif isinstance(posargs, PyAttribute):
+                    posargs = PyTuple([posargs])
+                posargs_unpacks = posargs_unpacks[1:]
+        else:
+            posargs_unpacks = [posargs_unpacks]
 
-        assert isinstance(kwarg_dict, PyDict)
-        for i in range(len(kwarg_dict.items)):
-            k, v = kwarg_dict.items[i]
-            if isinstance(v, PyConst) and v.val == '**KWARG**':
-                kwarg_dict.items.pop(i)
-                kwvar = k.val
-                break
-            elif not isinstance(k, PyConst):
-                kwvar = kwarg_dict
-                kwarg_dict = PyDict()
-                break
-
-        assert isinstance(posargs, PyTuple)
-        posvals = posargs.values
-        assert isinstance(posvals, list)
-        for i in range(len(posvals)):
-            posarg = posvals[i]
-            if isinstance(posarg, PyName) and posarg.name == 'args':
-                posvals.pop(i)
-                posvar = posarg
-                break
-
-        self.CALL_FUNCTION_CORE(func, list(posargs.values), list(kwarg_dict.items), posvar, kwvar)
+        func = self.stack.pop()
+        self.CALL_FUNCTION_CORE(func, list(posargs.values), list(kwarg_dict.items), posargs_unpacks, kwarg_unpacks)
 
     def CALL_FUNCTION_VAR_KW(self, addr, argc):
         self.CALL_FUNCTION(addr, argc, have_var=True, have_kw=True)
@@ -2213,14 +2207,7 @@ class SuiteDecompiler:
         self.stack.push(PyTuple(values))
 
     def BUILD_TUPLE_UNPACK_WITH_CALL(self, addr, count):
-        values = []
-        for o in self.stack.pop(count):
-            if isinstance(o, PyTuple):
-                values.extend(o.values)
-            else:
-                values.append(o)
-
-        self.stack.push(PyTuple(values))
+        self.stack.push(self.stack.pop(count))
 
     def BUILD_LIST(self, addr, count):
         values = [self.stack.pop() for i in range(count)]
@@ -2273,16 +2260,7 @@ class SuiteDecompiler:
         self.stack.push(d)
 
     def BUILD_MAP_UNPACK_WITH_CALL(self, addr, count):
-        d = PyDict()
-        for i in range(count):
-            o = self.stack.pop()
-            if isinstance(o, PyDict):
-                for item in o.items:
-                    k, v = item
-                    d.set_item(PyConst(k.val if isinstance(k,PyConst) else k.name), v)
-            else:
-                d.set_item(PyConst(o), PyConst('**KWARG**'))
-        self.stack.push(d)
+        self.stack.push(self.stack.pop(count))
 
     def BUILD_CONST_KEY_MAP(self, addr, count):
         keys = self.stack.pop()
@@ -2314,7 +2292,7 @@ class SuiteDecompiler:
 
     def JUMP_IF_FALSE_OR_POP(self, addr, target):
         end_addr = addr.jump()
-        self.push_popjump(True, end_addr, self.stack.pop(),addr)
+        self.push_popjump(True, end_addr, self.stack.pop(), addr)
         left = self.pop_popjump()
         if end_addr.opcode == ROT_TWO:
             opc, arg = end_addr[-1]
@@ -2359,7 +2337,7 @@ class SuiteDecompiler:
 
     def JUMP_IF_TRUE_OR_POP(self, addr, target):
         end_addr = addr.jump()
-        self.push_popjump(True, end_addr, self.stack.pop(),addr)
+        self.push_popjump(True, end_addr, self.stack.pop(), addr)
         left = self.pop_popjump()
         d = SuiteDecompiler(addr[1], end_addr, self.stack)
         d.run()
@@ -2416,7 +2394,7 @@ class SuiteDecompiler:
                             truthiness = not truthiness
                             if truthiness:
                                 cond = PyNot(cond)
-                        self.push_popjump(truthiness, jump_addr, cond,addr)
+                        self.push_popjump(truthiness, jump_addr, cond, addr)
                         return None
 
             self.push_popjump(truthiness, jump_addr, cond, addr)
@@ -2452,7 +2430,7 @@ class SuiteDecompiler:
             self.suite.add_statement(stmt)
             return end_true
         # Increase jump_addr to pop all previous jumps
-        self.push_popjump(truthiness, jump_addr[1], cond,addr)
+        self.push_popjump(truthiness, jump_addr[1], cond, addr)
         cond = self.pop_popjump()
         end_true = jump_addr[-1]
         if truthiness:
@@ -2468,7 +2446,7 @@ class SuiteDecompiler:
             if end_false and end_false[2] and end_false[2].opcode == RETURN_VALUE:
                 d_true = SuiteDecompiler(addr[1], end_true[1])
                 d_true.run()
-                d_false = SuiteDecompiler(jump_addr,end_false[1])
+                d_false = SuiteDecompiler(jump_addr, end_false[1])
                 d_false.run()
                 self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
 
