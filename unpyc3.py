@@ -1281,6 +1281,7 @@ class ForStatement(PyStatement, AsyncMixin):
     def __init__(self, iterable):
         AsyncMixin.__init__(self)
         self.iterable = iterable
+        self.else_body: Suite = None
 
     def store(self, dec, dest):
         self.dest = dest
@@ -1288,6 +1289,9 @@ class ForStatement(PyStatement, AsyncMixin):
     def display(self, indent):
         indent.write("{}for {} in {}:", self.async_prefix, self.dest, self.iterable)
         self.body.display(indent + 1)
+        if self.else_body:
+            indent.write('else:')
+            self.else_body.display(indent + 1)
 
     def gen_display(self, seq=()):
         s = "{}for {} in {}".format(self.async_prefix, self.dest, self.iterable.wrap() if isinstance(self.iterable, PyIfElse) else self.iterable)
@@ -2604,8 +2608,18 @@ class SuiteDecompiler:
         d_body.stack.push(for_stmt)
         d_body.run()
         for_stmt.body = d_body.suite
+        loop = addr.seek_back(SETUP_LOOP)
+        end_addr = jump_addr
+        if loop:
+            end_of_loop = loop.jump()[-1]
+            if end_of_loop.opcode != POP_BLOCK:
+                else_start = end_of_loop.seek_back(POP_BLOCK)
+                d_else = SuiteDecompiler(else_start, loop.jump())
+                d_else.run()
+                for_stmt.else_body = d_else.suite
+                end_addr = loop.jump()
         self.suite.add_statement(for_stmt)
-        return jump_addr
+        return end_addr
 
     # Function creation
 
