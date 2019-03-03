@@ -1745,9 +1745,14 @@ class SuiteDecompiler:
                 start_except = start_except[3]
                 end_except = start_except
 
+                nested_try: int = 0
                 while end_except and end_except[-1].opcode != RETURN_VALUE:
+                    if end_except.opcode == SETUP_EXCEPT:
+                        nested_try += 1
                     if end_except.opcode == POP_EXCEPT:
-                        break
+                        if nested_try == 0:
+                            break
+                        nested_try -= 1
                     end_except = end_except[1]
                 # Handle edge case where there is a return in the except
                 if end_except[-1].opcode == RETURN_VALUE:
