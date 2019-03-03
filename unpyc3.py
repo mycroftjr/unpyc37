@@ -532,7 +532,7 @@ class Address:
     def __add__(self, delta):
         return self.code.address(self.addr + delta)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Address:
         return self.code[self.index + index]
 
     def __iter__(self):
