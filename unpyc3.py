@@ -2402,6 +2402,8 @@ class SuiteDecompiler:
             if jump_addr.seek_forward(MAP_ADD):
                 return None
 
+            if addr.code.name=='<lambda>':
+                return None
             # Generator
             if jump_addr.seek_forward(YIELD_VALUE):
                 return None
