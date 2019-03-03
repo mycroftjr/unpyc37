@@ -862,7 +862,13 @@ class PyAttribute(PyExpr):
 
     def __str__(self):
         expr_str = self.expr.wrap(self.expr.precedence < self.precedence)
-        return "{}.{}".format(expr_str, self.attrname)
+        attrname = self.attrname
+
+        if isinstance(self.expr, PyName) and self.expr.name == 'self':
+            __ = attrname.name.find('__')
+            if __ > 0:
+                attrname = PyName(self.attrname.name[__:])
+        return "{}.{}".format(expr_str, attrname)
 
 
 class PyCallFunction(PyExpr, AwaitableMixin):
