@@ -2437,6 +2437,8 @@ class SuiteDecompiler:
             if jump_addr.seek_forward(YIELD_VALUE):
                 return None
 
+            if jump_addr.seek_back(JUMP_IF_TRUE_OR_POP,jump_addr[-2]):
+                return None
             # Generator
             if jump_addr.opcode != END_FINALLY and jump_addr[1] and jump_addr[1].opcode == JUMP_ABSOLUTE:
                 return None
