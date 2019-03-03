@@ -1328,7 +1328,7 @@ class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
         FunctionDefinition.__init__(self, code, defaults, kwdefaults, closure, paramobjs, annotations)
         DecorableStatement.__init__(self)
         AsyncMixin.__init__(self)
-        self.is_async = code.flags.coroutine
+        self.is_async = code.flags.coroutine or code.flags.async_generator
 
     def display_undecorated(self, indent):
         paramlist = ", ".join(self.getparams())
