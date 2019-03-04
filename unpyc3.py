@@ -1774,16 +1774,36 @@ class SuiteDecompiler:
 
                 end_addr = start_except[1]
                 j_except: Address = end_except[1]
-        if j_except and j_except.opcode == JUMP_FORWARD:
-            j_next = j_except.jump()
-            if j_next != end_addr:
-                start_else = end_addr
-                end_else = j_next
-                d_else = SuiteDecompiler(start_else, end_else)
-                d_else.run()
-                stmt.else_suite = d_else.suite
-                end_addr = end_else
         self.suite.add_statement(stmt)
+        if j_except and j_except.opcode in (JUMP_FORWARD, JUMP_ABSOLUTE, RETURN_VALUE):
+            j_next = j_except.jump()
+            start_else = end_addr
+            if j_next:
+                if j_next < start_else:
+                    if j_next < start_else:
+                        j_next = j_next.seek_back(SETUP_LOOP)
+                        if j_next:
+                            j_next = j_next.jump()
+            else:
+                return_count = 0
+                next_return = start_else
+                while next_return:
+                    if next_return.opcode in pop_jump_if_opcodes:
+                        j_next_return = next_return.jump()
+                        if j_next_return > next_return:
+                            next_return = j_next_return
+                    if next_return.opcode == RETURN_VALUE:
+                        return_count += 1
+                    next_return = next_return[1]
+                if return_count == 1:
+                    return end_addr
+
+            end_else = j_next
+            d_else = SuiteDecompiler(start_else, end_else)
+            end_addr = d_else.run()
+            if not end_addr:
+                end_addr = self.END_NOW
+            stmt.else_suite = d_else.suite
         return end_addr
 
     def SETUP_WITH(self, addr, delta):
