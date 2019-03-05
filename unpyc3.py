@@ -2511,15 +2511,17 @@ class SuiteDecompiler:
 
                 return end_false[1]
 
+        if end_true.opcode == RAISE_VARARGS and addr[1].opcode == LOAD_GLOBAL:
+            assert_addr = addr[1]
+            if assert_addr.code.names[assert_addr.arg].name == 'AssertionError':
+                cond = cond.operand if isinstance(cond, PyNot) else PyNot(cond)
+                self.suite.add_statement(SimpleStatement(f'assert {cond}'))
+                return end_true[1]
         # - If the true clause ends in return, make sure it's included
         # - If the true clause ends in RAISE_VARARGS, then it's an
         # assert statement. For now I just write it as a raise within
         # an if (see below)
         if end_true.opcode in (RETURN_VALUE, RAISE_VARARGS, POP_TOP):
-            # TODO: change
-            # if cond: raise AssertionError(x)
-            # to
-            #     assert cond, x
             d_true = SuiteDecompiler(addr[1], end_true[1])
             d_true.run()
             self.suite.add_statement(IfStatement(cond, d_true.suite, Suite()))
