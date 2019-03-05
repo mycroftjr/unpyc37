@@ -2105,6 +2105,8 @@ class SuiteDecompiler:
             self.write("yield {}", value)
         else:
             self.write("return {}", value)
+            if self.code.flags.generator:
+                self.write('yield')
 
     def GET_YIELD_FROM_ITER(self, addr):
         pass
