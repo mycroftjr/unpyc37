@@ -576,6 +576,15 @@ class Address:
         return self.seek(opcode, 1, end)
 
 
+    def seek_back_statement(self, opcode: Union[Iterable, int]) -> Address:
+        last_statement = self.seek_back(stmt_opcodes)
+        return self.seek(opcode, -1, last_statement)
+
+    def seek_forward_statement(self, opcode: Union[Iterable, int]) -> Address:
+        next_statement = self.seek_forward(stmt_opcodes)
+        return self.seek(opcode, 1, next_statement)
+
+
 class AsyncMixin:
     def __init__(self):
         self.is_async = False
@@ -2341,9 +2350,10 @@ class SuiteDecompiler:
 
     # and operator
 
-    def JUMP_IF_FALSE_OR_POP(self, addr, target):
+    def JUMP_IF_FALSE_OR_POP(self, addr: Address, target):
         end_addr = addr.jump()
-        self.push_popjump(True, end_addr, self.stack.pop(), addr)
+        truthiness = not addr.seek_back_statement(POP_JUMP_IF_TRUE)
+        self.push_popjump(truthiness, end_addr, self.stack.pop(), addr)
         left = self.pop_popjump()
         if end_addr.opcode == ROT_TWO:
             opc, arg = end_addr[-1]
@@ -2474,6 +2484,11 @@ class SuiteDecompiler:
                 if next_addr.opcode in stmt_opcodes:
                     break
                 if next_addr.opcode in pop_jump_if_opcodes:
+                    next_jump_addr = next_addr.jump()
+                    if next_jump_addr > jump_addr or (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes):
+                        return None
+
+                if next_addr.opcode in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
                     next_jump_addr = next_addr.jump()
                     if next_jump_addr > jump_addr or (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes):
                         return None
