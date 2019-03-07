@@ -2108,9 +2108,12 @@ class SuiteDecompiler:
         value = self.stack.pop()
         if isinstance(value, PyConst) and value.val is None:
             if addr[1] is not None:
-                self.write("return")
+                if self.code.flags.generator:
+                    self.write('yield')
+                else:
+                    self.write("return")
             return
-        if self.code.flags.coroutine or self.code.flags.iterable_coroutine:
+        if self.code.flags.iterable_coroutine:
             self.write("yield {}", value)
         else:
             self.write("return {}", value)
