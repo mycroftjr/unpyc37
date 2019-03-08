@@ -824,7 +824,7 @@ class PyCompare(PyExpr):
         self.complist = complist
 
     def __str__(self):
-        return " ".join(x if i % 2 else x.wrap(x.precedence <= 0)
+        return " ".join(x if i % 2 else x.wrap(x.precedence <= 6)
                         for i, x in enumerate(self.complist))
 
     def extends(self, other):
