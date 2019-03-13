@@ -953,13 +953,21 @@ class FunctionDefinition:
                     kwparams.append(name)
             l += kwcount
         if code_obj.co_flags & VARARGS:
-            params.append("*" + code_obj.co_varnames[l])
+            name = code_obj.co_varnames[l]
+            if name in self.paramobjs:
+                params.append(f'*{name}:{str(self.paramobjs[name])}')
+            else:
+                params.append(f'*{name}')
             l += 1
         elif kwparams:
             params.append("*")
         params.extend(kwparams)
         if code_obj.co_flags & VARKEYWORDS:
-            params.append("**" + code_obj.co_varnames[l])
+            name = code_obj.co_varnames[l]
+            if name in self.paramobjs:
+                params.append(f'**{name}:{str(self.paramobjs[name])}')
+            else:
+                params.append(f'**{name}')
 
         return params
 
