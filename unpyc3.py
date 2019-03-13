@@ -2307,6 +2307,7 @@ class SuiteDecompiler:
         if sys.version_info >= (3, 5):
             for i in range(count):
                 d.items.append(tuple(self.stack.pop(2)))
+            d.items = list(reversed(d.items))
         self.stack.push(d)
 
     def BUILD_MAP_UNPACK(self, addr, count):
