@@ -560,8 +560,8 @@ class Address:
         elif opcode in dis.hasjabs:
             return self.code.address(self.arg)
 
-    def seek(self, opcode: tuple, increment: int, end: Address = None) -> Address:
-        if not isinstance(opcode, tuple):
+    def seek(self, opcode: Iterable, increment: int, end: Address = None) -> Address:
+        if not isinstance(opcode, Iterable):
             opcode = (opcode,)
         a = self[increment]
         while a and a != end:
@@ -2108,7 +2108,7 @@ class SuiteDecompiler:
         value = self.stack.pop()
         if isinstance(value, PyConst) and value.val is None:
             if addr[1] is not None:
-                if self.code.flags.generator:
+                if self.code.flags.generator and addr[3] and not self.code[0].seek_forward({YIELD_FROM, YIELD_VALUE}):
                     self.write('yield')
                 else:
                     self.write("return")
