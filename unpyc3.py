@@ -740,14 +740,15 @@ class PyDict(PyExpr):
         return f"{{{itemstr}}}"
 
 
-class PyName(PyExpr):
+class PyName(PyExpr,AwaitableMixin):
     precedence = 100
 
     def __init__(self, name):
+        AwaitableMixin.__init__(self)
         self.name = name
 
     def __str__(self):
-        return self.name
+        return f'{self.await_prefix}{self.name}'
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and self.name == other.name
