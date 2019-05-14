@@ -668,7 +668,7 @@ class PyFormatString(PyExpr):
         return "f'{}'".format(''.join([
             p.base().replace('\'', '\"') if isinstance(p, PyFormatValue) else
             p.name if isinstance(p, PyName) else
-            str(p.val.encode('utf-8'))[1:].replace('\'', '')
+            str(p.val.encode('utf-8'))[1:].replace('\'', '').replace('{','{{').replace('}','}}')
             for p in self.params])
         )
 
