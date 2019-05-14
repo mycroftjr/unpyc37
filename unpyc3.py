@@ -2660,6 +2660,15 @@ class SuiteDecompiler:
         d_body.run()
         for_stmt.body = d_body.suite
         loop = addr.seek_back(SETUP_LOOP)
+        while loop:
+            outer_loop = loop.seek_back(SETUP_LOOP)
+            if outer_loop:
+                if outer_loop.jump().addr < loop.addr:
+                    break
+                else:
+                    loop = outer_loop
+            else:
+                break
         end_addr = jump_addr
         if loop:
             end_of_loop = loop.jump()[-1]
