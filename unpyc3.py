@@ -1591,11 +1591,9 @@ class SuiteDecompiler:
         addr, end_addr = self.start_addr, self.end_addr
         while addr and addr < end_addr:
             opcode, arg = addr
+            args = (addr,) if opcode < HAVE_ARGUMENT else (addr, arg)
             method = getattr(self, opname[opcode])
-            if opcode < HAVE_ARGUMENT:
-                new_addr = method(addr)
-            else:
-                new_addr = method(addr, arg)
+            new_addr = method(*args)
             if new_addr is self.END_NOW:
                 break
             elif new_addr is None:
