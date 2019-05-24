@@ -2090,11 +2090,11 @@ class SuiteDecompiler:
             return addr[i]
         return None
 
-    def IMPORT_FROM(self, addr, namei):
+    def IMPORT_FROM(self, addr: Address, namei):
         name = self.code.names[namei]
         self.stack.push(ImportFrom(name))
         if addr[1].opcode == ROT_TWO:
-            return addr[4]
+           return addr.seek_forward(STORE_NAME)
 
 
     def IMPORT_STAR(self, addr):
