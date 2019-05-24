@@ -1147,12 +1147,10 @@ class DocString(PyStatement):
         else:
             if "'''" not in self.string:
                 fence = "'''"
-            elif '"""' not in self.string:
-                fence = '"""'
             else:
-                raise NotImplemented
+                fence = '"""'
             lines = self.string.split('\n')
-            text = '\n'.join(l.encode('unicode_escape').decode()
+            text = '\n'.join(l.encode('unicode_escape').decode().replace(fence,'\\'+fence)
                              for l in lines)
             docstring = "{0}{1}{0}".format(fence, text)
             indent.write(docstring)
