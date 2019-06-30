@@ -1846,6 +1846,9 @@ class SuiteDecompiler:
     def NOP(self, addr):
         return
 
+    def SETUP_ANNOTATIONS(self, addr):
+        return
+
     def COMPARE_OP(self, addr, compare_opname):
         left, right = self.stack.pop(2)
         if compare_opname != 10:  # 10 is exception match
