@@ -2539,7 +2539,12 @@ class SuiteDecompiler:
             assert_addr = addr[1]
             if assert_addr.code.names[assert_addr.arg].name == 'AssertionError':
                 cond = cond.operand if isinstance(cond, PyNot) else PyNot(cond)
-                self.suite.add_statement(SimpleStatement(f'assert {cond}'))
+                d_true = SuiteDecompiler(addr[1], end_true)
+                d_true.run()
+                assert_pop = d_true.stack.pop()
+                assert_args = assert_pop.args if isinstance(assert_pop, PyCallFunction) else []
+                assert_arg_str = ', '.join(map(str,[cond, *assert_args]))
+                self.suite.add_statement(SimpleStatement(f'assert {assert_arg_str}'))
                 return end_true[1]
         # - If the true clause ends in return, make sure it's included
         # - If the true clause ends in RAISE_VARARGS, then it's an
