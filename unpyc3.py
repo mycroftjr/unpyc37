@@ -633,6 +633,8 @@ class PyConst(PyExpr):
             self.precedence = 100
 
     def __str__(self):
+        if self.val == 1e10000:
+            return '1e10000'
         return repr(self.val)
 
     def __iter__(self):
