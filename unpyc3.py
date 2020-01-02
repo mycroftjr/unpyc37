@@ -2499,7 +2499,9 @@ class SuiteDecompiler:
                     break
                 if next_addr.opcode in pop_jump_if_opcodes:
                     next_jump_addr = next_addr.jump()
-                    if next_jump_addr > jump_addr or (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes):
+                    if next_jump_addr > jump_addr or \
+                            (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes) or \
+                            (next_jump_addr[-1].opcode == SETUP_LOOP):
                         return None
 
                 if next_addr.opcode in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
