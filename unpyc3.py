@@ -1531,7 +1531,7 @@ class SuiteDecompiler:
     # This is put on the stack by LOAD_BUILD_CLASS
     BUILD_CLASS = object()
 
-    def __init__(self, start_addr, end_addr=None, stack=None):
+    def __init__(self, start_addr: Address, end_addr: Address=None, stack=None):
         self.start_addr = start_addr
         self.end_addr = end_addr
         self.code: Code = start_addr.code
