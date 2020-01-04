@@ -1539,6 +1539,7 @@ class SuiteDecompiler:
         self.suite: Suite = Suite()
         self.assignment_chain = []
         self.popjump_stack = []
+        self.last_addr: Address = None
 
     def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr):
         stack = self.popjump_stack
@@ -1593,6 +1594,7 @@ class SuiteDecompiler:
             opcode, arg = addr
             args = (addr,) if opcode < HAVE_ARGUMENT else (addr, arg)
             method = getattr(self, opname[opcode])
+            self.last_addr = addr
             new_addr = method(*args)
             if new_addr is self.END_NOW:
                 break
