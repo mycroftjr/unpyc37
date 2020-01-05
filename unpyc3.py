@@ -640,10 +640,11 @@ class PyConst(PyExpr):
             l.sort()
             vals = ', '.join(map(repr,l))
             return f'{{{vals}}}'
-        elif isinstance(self.val, str) and len(self.val) > 20 and '\0' not in self.val:
+        elif isinstance(self.val, str) and len(self.val) > 20 and '\0' not in self.val and '\x01' not in self.val:
             splt = self.val.split('\n')
             if len(splt) > 1:
-                return '\"\"\"\\\n' + '\n'.join(map(lambda s: s.replace('"', '\\"'), splt)) + '\"\"\"'
+                return '\"\"\"' + '\n'.join(map(lambda s: s.replace('\\', '\\\\').replace('"', '\\"'), splt)) \
+                       + '\"\"\"'
         return repr(self.val)
 
     def __iter__(self):
