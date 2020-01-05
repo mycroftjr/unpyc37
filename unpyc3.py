@@ -1685,39 +1685,17 @@ class SuiteDecompiler:
     def SETUP_LOOP(self, addr: Address, delta):
         jump_addr = addr.jump()
         end_addr = jump_addr[-1]
-
-        end_cond = self.scan_to_first_jump_if(addr[1], end_addr)
-        if end_addr.opcode in (POP_BLOCK,POP_TOP) or not end_cond or end_addr.seek_back(else_jump_opcodes,end_addr.seek_back(stmt_opcodes)):  # assume conditional
-            # scan to first jump
-            end_jump = None if not end_cond else end_cond.jump()
-            if end_jump and end_jump.opcode == POP_BLOCK:
-                end_jump = end_jump[1]
-
-            if end_cond and end_cond[1].opcode == BREAK_LOOP:
-                end_cond = None
-            if end_cond and end_jump == jump_addr:
-                # scan for conditional
-                d_cond = SuiteDecompiler(addr[1], end_cond)
-                #
-                d_cond.run()
-                cond = d_cond.stack.pop()
-                if end_cond.opcode == POP_JUMP_IF_TRUE:
-                    cond = PyNot(cond)
-                d_body = SuiteDecompiler(end_cond[1], end_addr)
-                while_stmt = WhileStatement(cond, d_body.suite)
-                d_body.stack.push(while_stmt)
-                d_body.run()
-                while_stmt.body = d_body.suite
-                self.suite.add_statement(while_stmt)
-                return jump_addr
-            elif (not end_cond or not end_cond.jump()[1] == addr.jump()) and not self.is_for_loop(addr[1], end_addr):
-                d_body = SuiteDecompiler(addr[1], end_addr)
-                while_stmt = WhileStatement(PyConst(True), d_body.suite)
-                d_body.stack.push(while_stmt)
-                d_body.run()
-                while_stmt.body = d_body.suite
-                self.suite.add_statement(while_stmt)
-                return jump_addr
+        end_cond = addr.seek_forward(stmt_opcodes).seek_back(pop_jump_if_opcodes)
+        while end_cond and end_cond.jump() != end_addr:
+            end_cond = end_cond.seek_back(pop_jump_if_opcodes)
+        if not end_cond and not self.is_for_loop(addr[1], end_addr):
+            d_body = SuiteDecompiler(addr[1], end_addr)
+            while_stmt = WhileStatement(PyConst(True), d_body.suite)
+            d_body.stack.push(while_stmt)
+            d_body.run()
+            while_stmt.body = d_body.suite
+            self.suite.add_statement(while_stmt)
+            return jump_addr
         return None
 
     def BREAK_LOOP(self, addr):
@@ -2444,6 +2422,7 @@ class SuiteDecompiler:
 
         last_loop = addr.seek_back(SETUP_LOOP)
         in_loop = last_loop and last_loop.jump() > addr
+        is_loop_condition  = (last_loop and last_loop.jump()[-1] == jump_addr)
 
         end_of_loop = jump_addr.opcode == FOR_ITER or jump_addr[-1].opcode == SETUP_LOOP
         if jump_addr.opcode == FOR_ITER:
@@ -2476,7 +2455,7 @@ class SuiteDecompiler:
             if isinstance(pj, PyCompare):
                 cond = pj.chain(cond)
 
-        if not addr.is_else_jump:
+        if not addr.is_else_jump and not is_loop_condition:
             # Handle generator expressions with or clause
             for_iter = addr.seek_back(FOR_ITER)
             if for_iter:
@@ -2518,6 +2497,9 @@ class SuiteDecompiler:
                             (next_jump_addr == jump_addr and jump_addr[-1].opcode in else_jump_opcodes) or \
                             (next_jump_addr[-1].opcode == SETUP_LOOP):
                         return None
+                    if next_addr[1] == jump_addr and addr.arg != next_addr.arg:
+                        return None
+
 
                 if next_addr.opcode in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
                     next_jump_addr = next_addr.jump()
@@ -2581,7 +2563,7 @@ class SuiteDecompiler:
             end_true = end_true[-2]
         d_true = SuiteDecompiler(addr[1], end_true)
         d_true.run()
-        if addr[1].opcode == JUMP_ABSOLUTE:
+        if in_loop and not is_loop_condition and addr[1].opcode == JUMP_ABSOLUTE:
             j = addr[1].jump()
             l = last_loop[1]
             while l.opcode not in stmt_opcodes:
@@ -2592,7 +2574,7 @@ class SuiteDecompiler:
                     return addr[2]
                 l = l[1]
 
-        if jump_addr.opcode == POP_BLOCK and not end_of_loop:
+        if jump_addr.opcode == POP_BLOCK and is_loop_condition:
             # It's a while loop
             stmt = WhileStatement(cond, d_true.suite)
             self.suite.add_statement(stmt)
