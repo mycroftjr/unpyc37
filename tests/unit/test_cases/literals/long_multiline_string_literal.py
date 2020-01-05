@@ -1,3 +1,2 @@
-a = """\
-This is a test.
+a = """This is a test.
 This is a test"""
