@@ -1909,8 +1909,8 @@ class SuiteDecompiler:
     def ROT_TWO(self, addr):
         # special case: x, y = z, t
         if addr[2] and \
-                addr[1].opcode == STORE_NAME and \
-                addr[2].opcode == STORE_NAME:
+                addr[1].opcode in (STORE_NAME, STORE_FAST) and \
+                addr[2].opcode in (STORE_NAME, STORE_FAST):
             val = PyTuple(self.stack.pop(2))
             unpack = Unpack(val, 2)
             self.stack.push(unpack)
@@ -1923,9 +1923,9 @@ class SuiteDecompiler:
         # special case: x, y, z = a, b, c
         if addr[4] and \
                 addr[1].opcode == ROT_TWO and \
-                addr[2].opcode == STORE_NAME and \
-                addr[3].opcode == STORE_NAME and \
-                addr[4].opcode == STORE_NAME:
+                addr[2].opcode in (STORE_NAME, STORE_FAST) and \
+                addr[3].opcode in (STORE_NAME, STORE_FAST) and \
+                addr[4].opcode in (STORE_NAME, STORE_FAST):
             val = PyTuple(self.stack.pop(3))
             unpack = Unpack(val, 3)
             self.stack.push(unpack)
