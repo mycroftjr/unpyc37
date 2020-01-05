@@ -2128,6 +2128,12 @@ class SuiteDecompiler:
 
     def RETURN_VALUE(self, addr):
         value = self.stack.pop()
+        if self.code.flags.generator and isinstance(value, PyConst) and not value.val and not addr[-2]:
+            cond = PyConst(False)
+            body = SimpleStatement('yield None')
+            loop = WhileStatement(cond, body)
+            self.suite.add_statement(loop)
+            return
         if isinstance(value, PyConst) and value.val is None:
             if addr[1] is not None:
                 if self.code.flags.generator and addr[3] and not self.code[0].seek_forward({YIELD_FROM, YIELD_VALUE}):
