@@ -106,7 +106,7 @@ for_jump_opcodes = (
     GET_ITER, FOR_ITER, GET_ANEXT
 )
 
-unpack_stmt_opcodes = (STORE_NAME, STORE_FAST, STORE_SUBSCR)
+unpack_stmt_opcodes = (STORE_NAME, STORE_FAST, STORE_SUBSCR, STORE_GLOBAL, STORE_ATTR, STORE_DEREF)
 
 def read_code(stream):
     # This helper is needed in order for the PEP 302 emulation to 
@@ -1888,9 +1888,9 @@ class SuiteDecompiler:
 
     def ROT_TWO(self, addr: Address):
         # special case: x, y = z, t
-        first = addr.seek_forward(unpack_stmt_opcodes)
-        second = first and first.seek_forward(unpack_stmt_opcodes)
         next_stmt = addr.seek_forward(stmt_opcodes)
+        first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
+        second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
         if first and second:
             val = PyTuple(self.stack.pop(2))
             unpack = Unpack(val, 2)
@@ -1902,10 +1902,11 @@ class SuiteDecompiler:
 
     def ROT_THREE(self, addr: Address):
         # special case: x, y, z = a, b, c
+        next_stmt = addr.seek_forward(stmt_opcodes)
         rot_two = addr[1]
-        first = rot_two and rot_two.seek_forward(unpack_stmt_opcodes)
-        second = first and first.seek_forward(unpack_stmt_opcodes)
-        third = second and second.seek_forward(unpack_stmt_opcodes)
+        first = rot_two and rot_two.seek_forward(unpack_stmt_opcodes, next_stmt)
+        second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
+        third = second and second.seek_forward(unpack_stmt_opcodes, next_stmt)
         if first and second and third:
             val = PyTuple(self.stack.pop(3))
             unpack = Unpack(val, 3)
