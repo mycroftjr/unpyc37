@@ -1568,9 +1568,14 @@ class SuiteDecompiler:
             obj_maker = PyBooleanOr if truthiness else PyBooleanAnd
             if truthiness and jtruthiness:
                 if original_jaddr.arg == original_addr.arg:
-                    obj_maker = PyBooleanAnd
-                    cond = PyNot(cond)
-                    jcond = PyNot(jcond)
+                    if original_jaddr[2]  and original_jaddr[2].opcode == RAISE_VARARGS:
+                        obj_maker = PyBooleanOr
+                        cond = cond
+                        jcond = jcond
+                    else:
+                        obj_maker = PyBooleanAnd
+                        cond = PyNot(cond)
+                        jcond = PyNot(jcond)
                 elif original_jaddr.arg > original_addr.arg:
                     obj_maker = PyBooleanOr
                     jcond = PyNot(jcond)
@@ -2422,6 +2427,7 @@ class SuiteDecompiler:
 
     def POP_JUMP_IF(self, addr: Address, target: int, truthiness: bool) -> Union[Address, None]:
         jump_addr = addr.jump()
+        next_addr = addr[1]
 
         last_loop = addr.seek_back(SETUP_LOOP)
         in_loop = last_loop and last_loop.jump() > addr
@@ -2519,16 +2525,25 @@ class SuiteDecompiler:
             stmt = IfStatement(cond, d_true.suite, None)
             self.suite.add_statement(stmt)
             return end_true
+
+
+        end_true = jump_addr[-1]
+
+        is_assert = \
+            end_true.opcode == RAISE_VARARGS and \
+            next_addr.opcode == LOAD_GLOBAL and \
+            next_addr.code.names[next_addr.arg].name == 'AssertionError'
+
         # Increase jump_addr to pop all previous jumps
         self.push_popjump(truthiness, jump_addr[1], cond, addr)
         cond = self.pop_popjump()
-        end_true = jump_addr[-1]
+
         if truthiness:
             last_pj = addr.seek_back(pop_jump_if_opcodes)
             if last_pj and last_pj.arg == addr.arg and isinstance(cond, PyBooleanAnd) or isinstance(cond, PyBooleanOr):
                 if last_pj.opcode != addr.opcode:
                     cond.right = PyNot(cond.right)
-            else:
+            elif end_true.opcode and not is_assert:
                 cond = PyNot(cond)
 
         if end_true.opcode == RETURN_VALUE:
@@ -2542,17 +2557,15 @@ class SuiteDecompiler:
 
                 return end_false[1]
 
-        if end_true.opcode == RAISE_VARARGS and addr[1].opcode == LOAD_GLOBAL:
-            assert_addr = addr[1]
-            if assert_addr.code.names[assert_addr.arg].name == 'AssertionError':
-                cond = cond.operand if isinstance(cond, PyNot) else PyNot(cond)
-                d_true = SuiteDecompiler(addr[1], end_true)
-                d_true.run()
-                assert_pop = d_true.stack.pop()
-                assert_args = assert_pop.args if isinstance(assert_pop, PyCallFunction) else []
-                assert_arg_str = ', '.join(map(str,[cond, *assert_args]))
-                self.suite.add_statement(SimpleStatement(f'assert {assert_arg_str}'))
-                return end_true[1]
+        if is_assert:
+            # cond = cond.operand if isinstance(cond, PyNot) else PyNot(cond)
+            d_true = SuiteDecompiler(addr[1], end_true)
+            d_true.run()
+            assert_pop = d_true.stack.pop()
+            assert_args = assert_pop.args if isinstance(assert_pop, PyCallFunction) else []
+            assert_arg_str = ', '.join(map(str,[cond, *assert_args]))
+            self.suite.add_statement(SimpleStatement(f'assert {assert_arg_str}'))
+            return end_true[1]
         # - If the true clause ends in return, make sure it's included
         # - If the true clause ends in RAISE_VARARGS, then it's an
         # assert statement. For now I just write it as a raise within
