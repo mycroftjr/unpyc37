@@ -2432,7 +2432,13 @@ class SuiteDecompiler:
 
         last_loop = addr.seek_back(SETUP_LOOP)
         in_loop = last_loop and last_loop.jump() > addr
-        is_loop_condition  = (last_loop and last_loop.jump()[-1] == jump_addr)
+        is_loop_condition = False
+        if in_loop:
+            end_addr = last_loop.jump()[-1]
+            end_cond = addr.seek_forward(stmt_opcodes).seek_back(pop_jump_if_opcodes)
+            while end_cond and end_cond.jump() != end_addr:
+                end_cond = end_cond.seek_back(pop_jump_if_opcodes)
+            is_loop_condition = end_cond == addr
 
         end_of_loop = jump_addr.opcode == FOR_ITER or jump_addr[-1].opcode == SETUP_LOOP
         if jump_addr.opcode == FOR_ITER:
