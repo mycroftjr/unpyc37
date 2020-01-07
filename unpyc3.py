@@ -2488,7 +2488,7 @@ class SuiteDecompiler:
             if addr.code.name=='<lambda>':
                 return None
             # Generator
-            if jump_addr.seek_forward(YIELD_VALUE):
+            if jump_addr.seek_forward(YIELD_VALUE, jump_addr.seek_forward(stmt_opcodes)):
                 return None
 
             if jump_addr.seek_back(JUMP_IF_TRUE_OR_POP,jump_addr[-2]):
