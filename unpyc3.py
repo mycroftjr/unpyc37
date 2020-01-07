@@ -1897,7 +1897,7 @@ class SuiteDecompiler:
         next_stmt = addr.seek_forward(unpack_terminators)
         first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
         second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
-        if first and second:
+        if first and second and len({*[first.opcode, second.opcode]}) == 1:
             val = PyTuple(self.stack.pop(2))
             unpack = Unpack(val, 2)
             self.stack.push(unpack)
@@ -1913,7 +1913,7 @@ class SuiteDecompiler:
         first = rot_two and rot_two.seek_forward(unpack_stmt_opcodes, next_stmt)
         second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
         third = second and second.seek_forward(unpack_stmt_opcodes, next_stmt)
-        if first and second and third:
+        if first and second and third and len({*[first.opcode, second.opcode,third.opcode]}) == 1:
             val = PyTuple(self.stack.pop(3))
             unpack = Unpack(val, 3)
             self.stack.push(unpack)
