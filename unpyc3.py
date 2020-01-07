@@ -2693,7 +2693,7 @@ class SuiteDecompiler:
         #     else:
         #         break
         end_addr = jump_addr
-        if loop:
+        if loop and not jump_addr[1].opcode in else_jump_opcodes:
             end_of_loop = loop.jump()[-1]
             if end_of_loop.opcode != POP_BLOCK:
                 else_start = end_of_loop.seek_back(POP_BLOCK)
