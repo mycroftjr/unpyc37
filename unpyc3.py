@@ -2810,14 +2810,14 @@ class SuiteDecompiler:
     # Formatted string literals
     def FORMAT_VALUE(self, addr, flags):
         formatter = ''
-        if flags == 1:
+        if (flags & 0x03) == 0x01:
             formatter = '!s'
-        elif flags == 2:
+        elif (flags & 0x03) == 0x02:
             formatter = '!r'
-        elif flags == 3:
+        elif (flags & 0x03) == 0x03:
             formatter = '!a'
-        elif flags == 4:
-            formatter = f':{self.stack.pop().val}'
+        if (flags & 0x04) == 0x04:
+            formatter = formatter + ':' + self.stack.pop().val
         val = self.stack.pop()
         f = PyFormatValue(val)
         f.formatter = formatter
