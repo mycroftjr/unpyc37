@@ -1332,10 +1332,14 @@ class WhileStatement(PyStatement):
     def __init__(self, cond, body):
         self.cond = cond
         self.body = body
+        self.else_body: Suite = None
 
     def display(self, indent):
         indent.write("while {}:", self.cond)
         self.body.display(indent + 1)
+        if self.else_body:
+            indent.write('else:')
+            self.else_body.display(indent + 1)
 
 
 class DecorableStatement(PyStatement):
@@ -1692,10 +1696,29 @@ class SuiteDecompiler:
     def SETUP_LOOP(self, addr: Address, delta):
         jump_addr = addr.jump()
         end_addr = jump_addr[-1]
-        end_cond = addr.seek_forward(stmt_opcodes).seek_back(pop_jump_if_opcodes)
-        while end_cond and end_cond.jump() != end_addr:
-            end_cond = end_cond.seek_back(pop_jump_if_opcodes)
-        if not end_cond and not self.is_for_loop(addr[1], end_addr):
+        if self.is_for_loop(addr[1], end_addr):
+            return
+
+        end_cond = addr.seek_forward(pop_jump_if_opcodes)
+        while end_cond and (end_cond.jump() != end_addr and end_cond.jump().opcode != POP_BLOCK):
+            end_cond = end_cond.seek_forward(pop_jump_if_opcodes)
+        if end_cond:
+            end_cond_j = end_cond.jump()
+            d_body = SuiteDecompiler(addr[1], end_cond.jump())
+            d_body.run()
+            result = d_body.suite.statements.pop()
+            if isinstance(result, IfStatement):
+                while_stmt = WhileStatement(result.cond, result.true_suite)
+                if(end_cond_j.opcode == POP_BLOCK):
+                    d_else = SuiteDecompiler(end_cond_j[1],jump_addr)
+                    d_else.run()
+                    while_stmt.else_body = d_else.suite
+                self.suite.add_statement(while_stmt)
+            elif isinstance(result, WhileStatement):
+                self.suite.add_statement(result)
+            return jump_addr
+
+        else:
             d_body = SuiteDecompiler(addr[1], end_addr)
             while_stmt = WhileStatement(PyConst(True), d_body.suite)
             d_body.stack.push(while_stmt)
