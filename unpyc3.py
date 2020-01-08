@@ -508,7 +508,7 @@ class Address:
         op = opname[self.opcode].ljust(18, ' ')
         try:
 
-            val = self.code.globals[self.arg] and self.arg + 1 < len(self.code.globals) if 'GLOBAL' in op else \
+            val = len(self.code.globals) and self.code.globals[self.arg] and self.arg + 1 < len(self.code.globals) if 'GLOBAL' in op else \
                 self.code.names[self.arg] if 'ATTR' in op else \
                     self.code.names[self.arg] if 'NAME' in op else \
                         self.code.names[self.arg] if 'LOAD_METHOD' in op else \
