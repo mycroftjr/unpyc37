@@ -106,7 +106,7 @@ for_jump_opcodes = (
     GET_ITER, FOR_ITER, GET_ANEXT
 )
 
-unpack_stmt_opcodes = {STORE_NAME, STORE_FAST, STORE_SUBSCR, STORE_GLOBAL, STORE_ATTR, STORE_DEREF}
+unpack_stmt_opcodes = {STORE_NAME, STORE_FAST, STORE_SUBSCR, STORE_GLOBAL, STORE_DEREF}
 unpack_terminators = stmt_opcodes - unpack_stmt_opcodes
 
 def read_code(stream):
