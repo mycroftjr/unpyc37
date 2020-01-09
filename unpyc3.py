@@ -2584,8 +2584,8 @@ class SuiteDecompiler:
                 d_false = SuiteDecompiler(jump_addr, end_false[1])
                 d_false.run()
                 self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
-
-                return end_false[1]
+                self.last_addr = end_false[1]
+                return max(d_false.last_addr, d_false.end_addr)
 
         if is_assert:
             # cond = cond.operand if isinstance(cond, PyNot) else PyNot(cond)
