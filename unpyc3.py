@@ -490,6 +490,12 @@ class Address:
         self.index = instr_index
         self.addr, (self.opcode, self.arg) = code.instr_seq[instr_index]
 
+    def __le__(self, other):
+        return isinstance(other, type(self)) and self.index <= other.index
+
+    def __ge__(self, other):
+        return isinstance(other, type(self)) and self.index >= other.index
+
     def __eq__(self, other):
         return (isinstance(other, type(self))
                 and self.code == other.code and self.index == other.index)
@@ -1557,7 +1563,7 @@ class SuiteDecompiler:
         self.popjump_stack = []
         self.last_addr: Address = None
 
-    def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr):
+    def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr: Address):
         stack = self.popjump_stack
         if jaddr and jaddr[-1].is_else_jump:
             # Increase jaddr to the 'else' address if it jumps to the 'then'
