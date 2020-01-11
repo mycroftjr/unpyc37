@@ -2544,6 +2544,8 @@ class SuiteDecompiler:
                         return None
                     if next_addr[1] == jump_addr and addr.arg != next_addr.arg:
                         return None
+                    if next_jump_addr.opcode == FOR_ITER:
+                        return None
 
 
                 if next_addr.opcode in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):

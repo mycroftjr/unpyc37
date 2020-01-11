@@ -1,0 +1,1 @@
+d = {k: v for (v, k) in l if k and not isinstance(k, int)}
