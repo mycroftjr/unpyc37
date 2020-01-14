@@ -2265,6 +2265,10 @@ class SuiteDecompiler:
                 if isinstance(posargs_unpacks[0], PyTuple):
                     posargs = posargs_unpacks[0]
                     posargs_unpacks = posargs_unpacks[1:]
+                elif isinstance(posargs_unpacks[0], PyConst) and isinstance(posargs_unpacks[0].val, tuple):
+                    posargs = PyTuple(list(map(PyConst,posargs_unpacks[0].val)))
+                    posargs_unpacks = posargs_unpacks[1:]
+
         else:
             posargs_unpacks = [posargs_unpacks]
 
