@@ -106,7 +106,7 @@ for_jump_opcodes = (
     GET_ITER, FOR_ITER, GET_ANEXT
 )
 
-unpack_stmt_opcodes = {STORE_NAME, STORE_FAST, STORE_SUBSCR, STORE_GLOBAL, STORE_DEREF}
+unpack_stmt_opcodes = {STORE_NAME, STORE_FAST, STORE_SUBSCR, STORE_GLOBAL, STORE_DEREF, STORE_ATTR}
 unpack_terminators = stmt_opcodes - unpack_stmt_opcodes
 
 def read_code(stream):
@@ -1923,7 +1923,7 @@ class SuiteDecompiler:
 
     def ROT_TWO(self, addr: Address):
         # special case: x, y = z, t
-        next_stmt = addr.seek_forward(unpack_terminators)
+        next_stmt = addr.seek_forward((*(stmt_opcodes- unpack_stmt_opcodes), *pop_jump_if_opcodes, *else_jump_opcodes))
         first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
         second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
         if first and second and len({*[first.opcode, second.opcode]}) == 1:
