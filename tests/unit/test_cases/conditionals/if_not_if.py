@@ -1,3 +1,2 @@
-if a is not None:
-    if b:
-        pass
+if a is not None and b:
+    pass

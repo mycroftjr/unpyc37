@@ -1566,15 +1566,21 @@ class SuiteDecompiler:
     def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr: Address):
         stack = self.popjump_stack
         if jaddr and jaddr[-1].is_else_jump:
-            # Increase jaddr to the 'else' address if it jumps to the 'then'
-            jaddr = jaddr[-1].jump()
+            if jtruthiness or jaddr[-1].jump() <= original_jaddr.jump():
+                # Increase jaddr to the 'else' address if it jumps to the 'then'
+                jaddr = jaddr[-1].jump()
         while stack:
             truthiness, addr, cond, original_addr = stack[-1]
             # if jaddr == None:
             #     raise Exception("#ERROR: jaddr is None")
-            # jaddr == None \
-            if jaddr and jaddr < addr or jaddr == addr:
-                break
+            # jaddr == None
+            if jaddr:
+                if jaddr < addr:
+                    break
+                if jaddr == addr and (truthiness or jtruthiness):
+                    break
+                # if jaddr == addr and not (truthiness or jtruthiness):
+                #     break
             stack.pop()
             obj_maker = PyBooleanOr if truthiness else PyBooleanAnd
             if truthiness and jtruthiness:
@@ -1600,8 +1606,16 @@ class SuiteDecompiler:
             if truthiness and not jtruthiness:
                 if original_jaddr.arg == original_addr.arg:
                     obj_maker = PyBooleanAnd
-                    cond = PyNot(cond)
-            if isinstance(jcond, obj_maker):
+                    if original_jaddr.opcode != original_addr.opcode:
+                        cond = PyNot(cond)
+            if not truthiness and  jtruthiness:
+                if original_jaddr.arg == original_addr.arg:
+                    jcond = PyNot(jcond)
+                    # cond = PyNot(cond)
+            last_true = original_addr.seek_back(POP_JUMP_IF_TRUE)
+            if isinstance(cond, PyBooleanOr)and obj_maker == PyBooleanAnd and (not last_true or last_true.jump() > original_jaddr):
+                jcond = PyBooleanOr(cond.left, obj_maker(cond.right, jcond))
+            elif isinstance(jcond, obj_maker):
                 # Use associativity of 'and' and 'or' to minimise the
                 # number of parentheses
                 jcond = obj_maker(obj_maker(cond, jcond.left), jcond.right)
@@ -1817,30 +1831,26 @@ class SuiteDecompiler:
                 end_addr = start_except[1]
                 j_except: Address = end_except[1]
         self.suite.add_statement(stmt)
-        if j_except and j_except.opcode in (JUMP_FORWARD, JUMP_ABSOLUTE, RETURN_VALUE):
-            j_next = j_except.jump()
-            start_else = end_addr
-            if j_next:
-                if j_next < start_else:
-                    if j_next < start_else:
-                        j_next = j_next.seek_back(SETUP_LOOP)
-                        if j_next:
-                            j_next = j_next.jump()
-            else:
-                return_count = 0
-                next_return = start_else
-                while next_return:
-                    if next_return.opcode in pop_jump_if_opcodes:
-                        j_next_return = next_return.jump()
-                        if j_next_return > next_return:
-                            next_return = j_next_return
-                    if next_return.opcode == RETURN_VALUE:
-                        return_count += 1
-                    next_return = next_return[1]
-                if return_count == 1:
-                    return end_addr
-
-            end_else = j_next
+        last_loop = addr.seek_back(SETUP_LOOP)
+        if last_loop and last_loop.jump() < addr:
+            last_loop = None
+        has_normal_else_clause = j_except and j_except.opcode == JUMP_FORWARD and j_except[2] != j_except.jump()
+        has_end_of_loop_else_clause = j_except.opcode == JUMP_ABSOLUTE and last_loop
+        has_return_else_clause = j_except.opcode == RETURN_VALUE
+        if has_normal_else_clause or has_end_of_loop_else_clause or has_return_else_clause:
+            assert j_except[1].opcode == END_FINALLY
+            start_else = j_except[2]
+            if has_return_else_clause and start_else.opcode == JUMP_ABSOLUTE and start_else[1].opcode == POP_BLOCK:
+                start_else = start_else[-1]
+            end_else: Address = None
+            if has_normal_else_clause:
+                end_else = j_except.jump()
+            elif has_end_of_loop_else_clause:
+                end_else = last_loop.jump().seek_back(JUMP_ABSOLUTE)
+            elif has_return_else_clause:
+                end_else = j_except[1].seek_forward(RETURN_VALUE)[1]
+            if has_return_else_clause and not end_else:
+                return end_addr
             d_else = SuiteDecompiler(start_else, end_else)
             end_addr = d_else.run()
             if not end_addr:
@@ -2550,6 +2560,8 @@ class SuiteDecompiler:
                         return None
                     if next_jump_addr.opcode == FOR_ITER:
                         return None
+                    if next_addr.opcode == addr.opcode and next_addr.arg == addr.arg:
+                        return None
 
 
                 if next_addr.opcode in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
@@ -2560,7 +2572,9 @@ class SuiteDecompiler:
             # if there are no nested conditionals and no else clause, write the true portion and jump ahead to the end of the conditional
             cond = self.pop_popjump()
             end_true = jump_addr
-            if truthiness:
+            if jump_addr.opcode == JUMP_ABSOLUTE and in_loop:
+                end_true = end_true.seek_back(JUMP_ABSOLUTE, addr)
+            if truthiness and not isinstance(cond, PyBooleanOr):
                 cond = PyNot(cond)
             d_true = SuiteDecompiler(addr[1], end_true)
             d_true.run()
@@ -2581,12 +2595,17 @@ class SuiteDecompiler:
         cond = self.pop_popjump()
 
         if truthiness:
+            x = addr.seek_back(pop_jump_if_opcodes, addr.seek_back(stmt_opcodes))
+
+            while x and x.jump() < addr.jump():
+                x = x.seek_back(pop_jump_if_opcodes)
             last_pj = addr.seek_back(pop_jump_if_opcodes)
-            if last_pj and last_pj.arg == addr.arg and isinstance(cond, PyBooleanAnd) or isinstance(cond, PyBooleanOr):
-                if last_pj.opcode != addr.opcode:
-                    cond.right = PyNot(cond.right)
-            elif end_true.opcode and not is_assert:
-                cond = PyNot(cond)
+            if not (x is not None and x.jump() == addr.jump()):
+                if last_pj and last_pj.arg != addr.arg and isinstance(cond, PyBooleanOr):
+                    if last_pj.opcode != addr.opcode:
+                        cond.right = PyNot(cond.right)
+                elif end_true.opcode and not is_assert:
+                    cond = PyNot(cond)
 
         if end_true.opcode == RETURN_VALUE:
             end_false = jump_addr.seek_forward(RETURN_VALUE)
