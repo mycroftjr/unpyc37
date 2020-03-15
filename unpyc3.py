@@ -1943,7 +1943,7 @@ class SuiteDecompiler:
                 unpack = Unpack(val, 2)
                 self.stack.push(unpack)
                 self.stack.push(unpack)
-                return;
+                return
 
         tos1, tos = self.stack.pop(2)
         self.stack.push(tos, tos1)
