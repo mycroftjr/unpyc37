@@ -1933,17 +1933,20 @@ class SuiteDecompiler:
 
     def ROT_TWO(self, addr: Address):
         # special case: x, y = z, t
-        next_stmt = addr.seek_forward((*(stmt_opcodes- unpack_stmt_opcodes), *pop_jump_if_opcodes, *else_jump_opcodes))
-        first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
-        second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
-        if first and second and len({*[first.opcode, second.opcode]}) == 1:
-            val = PyTuple(self.stack.pop(2))
-            unpack = Unpack(val, 2)
-            self.stack.push(unpack)
-            self.stack.push(unpack)
-        else:
-            tos1, tos = self.stack.pop(2)
-            self.stack.push(tos, tos1)
+
+        if addr[-1].opcode in (LOAD_ATTR, LOAD_GLOBAL, LOAD_NAME, BINARY_SUBSCR, BUILD_LIST):
+            next_stmt = addr.seek_forward((*(stmt_opcodes- unpack_stmt_opcodes), *pop_jump_if_opcodes, *else_jump_opcodes))
+            first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
+            second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
+            if first and second and len({*[first.opcode, second.opcode]}) == 1:
+                val = PyTuple(self.stack.pop(2))
+                unpack = Unpack(val, 2)
+                self.stack.push(unpack)
+                self.stack.push(unpack)
+                return;
+
+        tos1, tos = self.stack.pop(2)
+        self.stack.push(tos, tos1)
 
     def ROT_THREE(self, addr: Address):
         # special case: x, y, z = a, b, c
