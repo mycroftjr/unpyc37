@@ -1889,7 +1889,10 @@ class SuiteDecompiler:
     def push_popjump(self, jtruthiness, jaddr, jcond, original_jaddr: Address):
         stack = self.popjump_stack
         if original_jaddr in self.code.end_chained_jumps:
-            next_addr = original_jaddr[4]
+            if jtruthiness:
+                next_addr = original_jaddr[3]# not(a<b<c)
+            else:
+                next_addr = original_jaddr[4]#(a<b<c)
         else:
             next_addr = original_jaddr[1]
         while stack:
@@ -2322,7 +2325,7 @@ class SuiteDecompiler:
         if addr[-1].opcode in (LOAD_ATTR, LOAD_GLOBAL, LOAD_NAME, LOAD_CONST, LOAD_FAST, LOAD_DEREF, BINARY_SUBSCR, BUILD_LIST, CALL_FUNCTION):
             next_stmt = addr.seek_forward((*unpack_terminators, *pop_jump_if_opcodes, *else_jump_opcodes))
             if next_stmt is None or next_stmt > self.end_block:
-                next_stmt = self.end_block
+                next_stmt = self.end_addr
             first = addr.seek_forward(unpack_stmt_opcodes, next_stmt)
             second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
             if first and second and len({*[first.opcode, second.opcode]}) == 1:
@@ -2341,7 +2344,7 @@ class SuiteDecompiler:
             # special case: x, y, z = a, b, c
             next_stmt = addr.seek_forward((*unpack_terminators, *pop_jump_if_opcodes, *else_jump_opcodes))
             if next_stmt is None or next_stmt > self.end_block:
-                next_stmt = self.end_block
+                next_stmt = self.end_addr
             rot_two = addr[1]
             first = rot_two and rot_two.seek_forward(unpack_stmt_opcodes, next_stmt)
             second = first and first.seek_forward(unpack_stmt_opcodes, next_stmt)
@@ -2557,7 +2560,7 @@ class SuiteDecompiler:
 
     def RETURN_VALUE(self, addr):
         value = self.stack.pop()
-        if self.code.flags.generator and isinstance(value, PyConst) and not value.val and not addr[-2]:
+        if self.code.flags.generator and isinstance(value, PyConst) and value.val is None and not addr[-2]:
             cond = PyConst(False)
             body = SimpleStatement('yield None')
             loop = WhileStatement(cond, body)
@@ -3194,22 +3197,23 @@ class SuiteDecompiler:
         if end_true.opcode == RETURN_VALUE and not addr.is_continue_jump and j_addr <= self.end_block:
             d_true = SuiteDecompiler(next_addr, end_true[1])
             d_true.run()
+            x = len(d_true.suite.statements)
+            stmt = d_true.suite.statements[x - 1]
+            if not (isinstance(stmt, SimpleStatement) and (stmt.val.startswith("return") or stmt.val == "yield")):
+                self.suite.add_statement(IfStatement(cond, d_true.suite, None))
+                return j_addr
             d_false = SuiteDecompiler(j_addr, self.end_addr)
             d_false.run()
             x = len(d_false.suite.statements)
             for i in range(x):
                 stmt = d_false.suite.statements[i]
                 if isinstance(stmt, SimpleStatement) and stmt.val.startswith("return"):
-                    end_false = -1
                     if i < x - 1:
-                        if i < x - 2:
-                            end_false = i
-                        else:
-                            stmt = d_false.suite.statements[i + 1]
-                            if not (isinstance(stmt, SimpleStatement) and stmt.val == "yield"):
-                                end_false = i
-                    if end_false >= 0:
-                        end_false = end_false + 1
+                        stmt = d_false.suite.statements[i + 1]
+                        if isinstance(stmt, SimpleStatement) and stmt.val == "yield":
+                            i = i + 1
+                    if i < x - 1:
+                        end_false = i + 1
                         self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
                         self.suite.statements = self.suite.statements + d_false.suite.statements[end_false:]
                         d_false.suite.statements = d_false.suite.statements[:end_false]
@@ -3221,13 +3225,19 @@ class SuiteDecompiler:
                         end_false = True
                     elif not self.end_addr:
                         c = self.end_block[-1]
-                        if c.opcode == LOAD_CONST and not c.addr in self.code.linemap and\
+                        if c.opcode == LOAD_CONST and\
                                 not c[-1].opcode in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
-                            end_false = True
-                            for x in self.code.ternaryop_jumps:
-                                if x.jump() == c:
-                                    end_false = False
-                                    break
+                            x = self.code.consts[c.arg]
+                            if x.val is None:
+                                if self.code.flags.generator:
+                                    end_false = self.code[0].seek_forward(RETURN_VALUE, c) is not None
+                                else:
+                                    end_false = not c.addr in self.code.linemap
+                                if end_false:
+                                    for x in self.code.ternaryop_jumps:
+                                        if x.jump() == c:
+                                            end_false = False
+                                            break
                     if end_false:
                         self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
                         return self.END_NOW
@@ -3266,9 +3276,14 @@ class SuiteDecompiler:
             for i in range(x):
                 stmt = d_true.suite.statements[i]
                 if isinstance(stmt, SimpleStatement) and stmt.val.startswith("return"):
-                    if i < x - 1 or self.end_block.is_continue_jump:
+                    if i < x - 2 or self.end_block.is_continue_jump:
                         end_true = i
                         break
+                    if i == x - 2:
+                        stmt = d_true.suite.statements[i + 1]
+                        if not (isinstance(stmt, SimpleStatement) and stmt.val == "yield"):
+                            end_true = i + 1
+                    break
             if end_true is None:
                 self.suite.add_statement(IfStatement(cond, d_true.suite, None))
             else:
@@ -3654,3 +3669,4 @@ if __name__ == "__main__":
         print('USAGE: {} <filename.pyc>'.format(sys.argv[0]))
     else:
         print(decompile(sys.argv[1])) 
+        
