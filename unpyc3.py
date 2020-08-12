@@ -592,7 +592,7 @@ class Code:
                                         if curjump not in self.statement_jumps:
                                             curaddr = curjump[1]
                                             if x.opcode == JUMP_FORWARD:
-                                                while curaddr < x:
+                                                while curaddr <= lastjump:# < x:
                                                     if curaddr.opcode in pop_jump_if_opcodes and\
                                                             curaddr.arg == curjump.arg:# if a and b:...else:
                                                         curaddr = None
@@ -640,22 +640,14 @@ class Code:
 
     def find_else(self):
         jumps = {}
-        last_jump = None
         for addr in self:
             opcode, arg = addr
             if opcode in pop_jump_if_opcodes:
                 jump_addr = self.address(arg)
                 if (jump_addr[-1].opcode in else_jump_opcodes
                         or jump_addr.opcode == FOR_ITER):
-                    last_jump = addr
                     jumps[jump_addr] = addr
             elif opcode == JUMP_ABSOLUTE:
-                # This case is to deal with some nested ifs such as:
-                # if a:
-                # if b:
-                #         f()
-                #     elif c:
-                #         g()
                 jump_addr = self.address(arg)
                 if jump_addr in jumps:
                     jumps[addr] = jumps[jump_addr]
@@ -663,10 +655,6 @@ class Code:
                 jump_addr = addr[1] + arg
                 if jump_addr in jumps:
                     jumps[addr] = jumps[jump_addr]
-            elif opcode in stmt_opcodes and last_jump is not None:
-                # This opcode will generate a statement, so it means
-                # that the last POP_JUMP_IF_x was an else-jump
-                jumps[addr] = last_jump
         self.else_jumps = set(jumps.values())
 
     def get_suite(self, include_declarations=True, look_for_docstring=False) -> Suite:
@@ -2042,12 +2030,18 @@ class SuiteDecompiler:
             return addr and addr.seek_stmt(None)
         return False
     
+    def verify_loop_laststmt(self, ss: Suite):
+        if len(ss.statements):
+            stmt = ss.statements[-1]
+            if isinstance(stmt, SimpleStatement) and stmt.val == "continue":
+                if self.end_block.is_continue_jump and self.end_block.addr in self.code.linemap:
+                    stmt.val = "pass"
+    
     #
     # All opcode methods in CAPS below.
     #
 
     def SETUP_LOOP(self, addr: Address, delta):
-
         for wcontext in self.code.loops:
             if wcontext[0] == addr.index:
                 break
@@ -2058,11 +2052,12 @@ class SuiteDecompiler:
         if wcontext[1] > 0:
             end_cond = self.code[wcontext[1]]
             end_cond_j = end_cond.jump()
-            d_body = SuiteDecompiler(addr[1], end_cond.jump())
+            d_body = SuiteDecompiler(addr[1], end_cond_j)
             d_body.end_while_condition = end_cond
             d_body.run()
             result = d_body.suite.statements.pop()
             if isinstance(result, IfStatement):
+                d_body.verify_loop_laststmt(result.true_suite)
                 while_stmt = WhileStatement(result.cond, result.true_suite)
                 if(end_cond_j.opcode == POP_BLOCK):
                     d_else = SuiteDecompiler(end_cond_j[1],jump_addr)
@@ -2072,6 +2067,7 @@ class SuiteDecompiler:
             else:
                 self.suite.add_statement(SimpleStatement('"""unpyc3: decompilation error: while condition isnt IfStatement"""'))
                 while_stmt = WhileStatement(PyName('unrecognised'), d_body.suite)
+                d_body.verify_loop_laststmt(d_body.suite)
                 if(end_cond_j.opcode == POP_BLOCK):
                     d_else = SuiteDecompiler(end_cond_j[1],jump_addr)
                     d_else.run()
@@ -2083,6 +2079,7 @@ class SuiteDecompiler:
             d_body = SuiteDecompiler(addr[1], end_addr)
             d_body.end_while_condition = addr
             d_body.run()
+            d_body.verify_loop_laststmt(d_body.suite)
             while_stmt = WhileStatement(PyConst(True), d_body.suite)
             self.suite.add_statement(while_stmt)
         return jump_addr
@@ -3140,8 +3137,12 @@ class SuiteDecompiler:
                     if x < 2:
                         if x == 1:
                             if self.end_block.addr in self.code.linemap:
-                                self.suite.add_statement(IfStatement(cond, d_true.suite, None))
-                                self.suite.add_statement(d_false.suite.statements[0])#continue
+                                if self.end_addr.index == wcontext[2]:
+                                    d_false.suite.statements[0].val = "pass"
+                                    self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
+                                else:
+                                    self.suite.add_statement(IfStatement(cond, d_true.suite, None))
+                                    self.suite.add_statement(d_false.suite.statements[0])#continue
                             else:
                                 self.suite.add_statement(IfStatement(cond, d_true.suite, d_false.suite))
                         else:
@@ -3197,8 +3198,7 @@ class SuiteDecompiler:
         if end_true.opcode == RETURN_VALUE and not addr.is_continue_jump and j_addr <= self.end_block:
             d_true = SuiteDecompiler(next_addr, end_true[1])
             d_true.run()
-            x = len(d_true.suite.statements)
-            stmt = d_true.suite.statements[x - 1]
+            stmt = d_true.suite.statements[-1]
             if not (isinstance(stmt, SimpleStatement) and (stmt.val.startswith("return") or stmt.val == "yield")):
                 self.suite.add_statement(IfStatement(cond, d_true.suite, None))
                 return j_addr
@@ -3423,21 +3423,13 @@ class SuiteDecompiler:
         for_stmt = ForStatement(iterable)
         d_body.stack.push(for_stmt)
         d_body.run()
+        d_body.verify_loop_laststmt(d_body.suite)
         for_stmt.body = d_body.suite
-        if len(for_stmt.body.statements) == 1:
+        '''if len(for_stmt.body.statements) == 1:
             end_body = end_body[-1]
             if end_body.addr in self.code.linemap and end_body.opcode == JUMP_ABSOLUTE:
-                for_stmt.body.statements[0].val = "pass"
+                for_stmt.body.statements[0].val = "pass"'''
         loop = addr.seek_back(SETUP_LOOP)
-        # while loop:
-        #     outer_loop = loop.seek_back(SETUP_LOOP)
-        #     if outer_loop:
-        #         if outer_loop.jump().addr < loop.addr:
-        #             break
-        #         else:
-        #             loop = outer_loop
-        #     else:
-        #         break
         end_addr = jump_addr
         if loop and not jump_addr[1].opcode in else_jump_opcodes:
             end_of_loop = loop.jump()[-1]
@@ -3669,4 +3661,3 @@ if __name__ == "__main__":
         print('USAGE: {} <filename.pyc>'.format(sys.argv[0]))
     else:
         print(decompile(sys.argv[1])) 
-        
