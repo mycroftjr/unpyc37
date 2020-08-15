@@ -566,7 +566,8 @@ class Code:
                             curjump = proc_chained(self, curjump)
                             x = curjump.jump()[-1]
                             if curjump.addr < curjump.arg <= next_stmt.addr and\
-                                    x.opcode == JUMP_FORWARD:
+                                    x.opcode == JUMP_FORWARD and\
+                                    x[-1].opcode != POP_TOP:
                                 curaddr = curjump[1]
                                 while curaddr < x:
                                     if curaddr.opcode in pop_jump_if_opcodes and\
@@ -3285,7 +3286,12 @@ class SuiteDecompiler:
                             end_true = i + 1
                     break
             if end_true is None:
-                self.suite.add_statement(IfStatement(cond, d_true.suite, None))
+                if self.end_block.opcode == JUMP_FORWARD and self.end_block.arg == 0: #self.end_block[1] == j_addr
+                    d_false = Suite()
+                    d_false.add_statement(SimpleStatement('pass'))
+                    self.suite.add_statement(IfStatement(cond, d_true.suite, d_false))
+                else:
+                    self.suite.add_statement(IfStatement(cond, d_true.suite, None))
             else:
                 end_true = end_true + 1
                 self.suite.add_statement(IfStatement(cond, d_true.suite, None))
@@ -3348,8 +3354,11 @@ class SuiteDecompiler:
                 end_false = self.end_addr
             else:
                 end_false = end_true.jump()
-                if end_false.opcode == RETURN_VALUE:
+                if end_false > self.end_block:
+                    end_false = self.end_addr
+                elif end_false.opcode == RETURN_VALUE:
                     end_false = end_false[1]
+                
         elif end_true.opcode == RETURN_VALUE:
             # find the next RETURN_VALUE
             end_false = jump_addr
