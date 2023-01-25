@@ -69,6 +69,7 @@ VARKEYWORDS = 8
 # Put opcode names in the global namespace
 for name, val in opmap.items():
     globals()[name] = val
+PRINT_EXPR = 70
 
 # These opcodes will generate a statement. This is used in the first
 # pass (in Code.find_else) to find which POP_JUMP_IF_* instructions
@@ -1457,7 +1458,7 @@ class PyGenExpr(PyComp):
 
 
 class PyYield(PyExpr):
-    precedence = 1
+    precedence = 0
 
     def __init__(self, value):
         self.value = value
@@ -1467,7 +1468,7 @@ class PyYield(PyExpr):
 
 
 class PyYieldFrom(PyExpr):
-    precedence = 1
+    precedence = 0
 
     def __init__(self, value):
         self.value = value
@@ -2431,6 +2432,10 @@ class SuiteDecompiler:
             # We're done with this except clause
             return self.END_NOW
 
+    def PRINT_EXPR(self, addr):
+        expr = self.stack.pop()
+        self.write("{}", expr)
+    
     #
     # Stack manipulation
     #
@@ -3847,4 +3852,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         print('USAGE: {} <filename.pyc>'.format(sys.argv[0]))
     else:
-        print(decompile(sys.argv[1])) 
+        print(decompile(sys.argv[1]))
