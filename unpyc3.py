@@ -3084,6 +3084,12 @@ class SuiteDecompiler:
                 end_false = self.end_block
                 if not end_false.opcode == RETURN_VALUE:
                     end_false = self.end_block.seek_back(RETURN_VALUE, jump_addr)#include nested ternary operators
+                    if end_false is None:
+                        end_false = self.end_block
+                        if end_false[1] and end_false[1].opcode == RETURN_VALUE:# return d or (a if b else c)
+                            end_false = end_false[1]
+                        #else:
+                            #Exception
                 d_false = SuiteDecompiler(jump_addr, end_false)
                 d_false.find_end_finally = True
                 d_false.run()
@@ -3852,4 +3858,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         print('USAGE: {} <filename.pyc>'.format(sys.argv[0]))
     else:
-        print(decompile(sys.argv[1]))
+        print(decompile(sys.argv[1])) 
