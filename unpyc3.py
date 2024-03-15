@@ -410,6 +410,7 @@ class Code:
         #self.statement_jumps = tuple(self.statement_jumps)
         self.ternaryop_jumps = tuple(self.ternaryop_jumps)
         self.flags: CodeFlags = CodeFlags(code_obj.co_flags)
+        self.annotations = None#parent code sends these names when MAKE_FUNCTION has flag 8
 
     def __getitem__(self, instr_index):
         if 0 <= instr_index < len(self.instr_seq):
@@ -754,18 +755,20 @@ class Code:
 
     def get_suite(self, include_declarations=True, look_for_docstring=False) -> Suite:
         dec = SuiteDecompiler(self[0])
-        trace('\nname = '+self.name+'\n')
+        trace('\nname = '+self.name)
+        ts = ''
         for g in self.instr_seq:
             aop,aarg = g[1]
             if g[0] in self.linemap:
-                trace('\n'+str(self.lineno[self.linemap.index(g[0])])+': ')
-            trace(' ('+str(g[0])+': '+opname[aop]+'('+str(aarg)+'), ')
-        trace('\nstatement_jumps:\n')
+                ts = ts + '\n'+str(self.lineno[self.linemap.index(g[0])])+': '
+            ts = ts + (' '+str(g[0])+': '+opname[aop]+'('+str(aarg)+'), ')
+        trace(ts)
+        trace('\nstatement_jumps:')
         for ttt in self.statement_jumps:
-            trace(str(ttt)+'\n')
-        trace('\nternaryop_jumps:\n')
+            trace(ttt)
+        trace('\nternaryop_jumps:')
         for ttt in self.ternaryop_jumps:
-            trace(str(ttt)+'\n')
+            trace(ttt)
         dec.run()
         first_stmt = dec.suite and dec.suite[0]
         # Change __doc__ = "docstring" to "docstring"
@@ -773,7 +776,7 @@ class Code:
             chain = first_stmt.chain
             if len(chain) == 2 and str(chain[0]) == "__doc__":
                 dec.suite[0] = DocString(first_stmt.chain[1].val)
-        if include_declarations and (self.globals or self.nonlocals):
+        if include_declarations and (self.globals or self.nonlocals or self.annotations):
             suite = Suite()
             if self.globals:
                 stmt = "global " + ", ".join(map(str, self.globals))
@@ -781,6 +784,27 @@ class Code:
             if self.nonlocals:
                 stmt = "nonlocal " + ", ".join(map(str, self.nonlocals))
                 suite.add_statement(SimpleStatement(stmt))
+            if self.annotations is not None:
+                #The annotations in nested functions are not evaluated and not stored but affect code and flags in parent function
+                #def fa():
+                #    from ss import aa
+                #    def fb():
+                #        t:aa = 0
+                unused_deref_names = [x.name for x in self.derefnames]
+                for addr in self:
+                    opcode, arg = addr
+                    if opcode in (LOAD_DEREF,STORE_DEREF, DELETE_DEREF, LOAD_CLOSURE):
+                        name = self.derefnames[arg].name
+                        if name in unused_deref_names:
+                            unused_deref_names.remove(name)
+                childvarnames = [x.name for x in self.varnames]
+                if len(childvarnames) > 0:
+                    for t in self.annotations:
+                        if isinstance(t, PyName):
+                            t = t.name
+                            if not t.startswith("__") and (t in unused_deref_names) and t != "self":
+                                stmt = childvarnames[0] + ":" + t + "#Inserted by decompiler to adjust code flags. Remove this line."
+                                suite.add_statement(SimpleStatement(stmt))
             for stmt in dec.suite:
                 suite.add_statement(stmt)
             return suite
@@ -1262,8 +1286,8 @@ class PyIfElse(PyExpr):
     def __str__(self):
         p = self.precedence
         cond_str = self.cond.wrap(self.cond.precedence <= p)
-        true_str = self.true_expr.wrap(self.cond.precedence <= p)
-        false_str = self.false_expr.wrap(self.cond.precedence < p)
+        true_str = self.true_expr.wrap(self.true_expr.precedence <= p)
+        false_str = self.false_expr.wrap(self.false_expr.precedence < p)
         return "{} if {} else {}".format(true_str, cond_str, false_str)
 
 
@@ -1769,6 +1793,7 @@ class DefStatement(FunctionDefinition, DecorableStatement, AsyncMixin):
         DecorableStatement.__init__(self)
         AsyncMixin.__init__(self)
         self.is_async = code.flags.coroutine or code.flags.async_generator
+        self.code.annotations = self.annotations
 
     def display_undecorated(self, indent):
         paramlist = ", ".join(self.getparams())
@@ -3676,15 +3701,16 @@ class SuiteDecompiler:
         else:
             code = Code(testType, self.code)
         closure = self.stack.pop() if is_closure else None
-        annotations = {}
+        annotations = None
         kwdefaults = {}
         defaults = {}
+        paramobjs = {}
         if argc & 8:
             annotations = list(self.stack.pop())
         if argc & 4:
-            annotations = self.stack.pop()
-            if isinstance(annotations, PyDict):
-                annotations = {str(k[0].val).replace('\'', ''): str(k[1]) for k in annotations.items}
+            paramobjs = self.stack.pop()
+            if isinstance(paramobjs, PyDict):
+                paramobjs = {str(k[0].val).replace('\'', ''): str(k[1]) for k in paramobjs.items}
         if argc & 2:
             kwdefaults = self.stack.pop()
             if isinstance(kwdefaults, PyDict):
@@ -3695,7 +3721,7 @@ class SuiteDecompiler:
         if argc & 1:
             defaults = list(map(lambda x: str(x if isinstance(x, PyExpr) else PyConst(x)), self.stack.pop()))
         func_maker = code_map.get(code.name, DefStatement)
-        self.stack.push(func_maker(code, defaults, kwdefaults, closure, annotations, annotations))
+        self.stack.push(func_maker(code, defaults, kwdefaults, closure, paramobjs, annotations))
 
     def MAKE_FUNCTION(self, addr, argc, is_closure=False):
         if sys.version_info < (3, 6):
