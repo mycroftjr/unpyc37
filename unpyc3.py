@@ -512,10 +512,13 @@ class Code:
                         curaddr = curaddr[1]
                     
                     curaddr = addr[1]
+                    x = 0
                     while True:
                         if curaddr >= end_addr or curaddr.opcode in stmt_opcodes:
                             break
-                        if curaddr.opcode in for_jump_opcodes:
+                        if x and curaddr.opcode == GET_ITER:#generator
+                            x -= 1
+                        elif curaddr.opcode in for_jump_opcodes:
                             isforloop = True
                             break
                         elif curaddr.opcode == JUMP_ABSOLUTE:
@@ -523,6 +526,8 @@ class Code:
                             if cur_addr.opcode in for_jump_opcodes:
                                 isforloop = True
                             break
+                        elif curaddr.opcode == MAKE_FUNCTION:#generator
+                            x += 1
                         curaddr = curaddr[1]
                     end_cond = 0
                     if isforloop:
@@ -1731,7 +1736,10 @@ class IfStatement(PyStatement):
             else:
                 raise Exception('unrecognized genexp')
         
-        s = s + "{}".format(self.cond)
+        if isinstance(self.cond, PyIfElse):
+            s = s + "({})".format(self.cond)
+        else:
+            s = s + "{}".format(self.cond)
         if isinstance(self.true_suite.statements[0], IfStatement):
             s = s + ' and'
         return self.true_suite.gen_display(seq + (s,))
