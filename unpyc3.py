@@ -830,7 +830,7 @@ class Code:
         name in one of the surrounding code objects.  This is called
         by LOAD_GLOBAL
         """
-        if self.name not in ('<lambda>','<listcomp>','<setcomp>','<dictcomp>','<genexpr>'):
+        if self.name not in code_map.keys():
             parent = self.parent
             while parent:
                 if name in parent.varnames or name in parent.globals:
@@ -1997,6 +1997,7 @@ class SuiteDecompiler:
         self.popjump_stack = []
         self.scan_for_else = False
         self.find_end_finally = False
+        self.expression_in_result = False
         if self.end_addr:
             self.end_block = self.end_addr[-1]
         else:
@@ -2137,6 +2138,8 @@ class SuiteDecompiler:
             if (self.scan_for_else or self.find_end_finally) and addr.opcode == RETURN_VALUE:
                 break
             addr = new_addr
+            if self.expression_in_result and addr.opcode == RETURN_VALUE:
+                break
         return addr
 
     def write(self, template, *args):
@@ -2257,7 +2260,7 @@ class SuiteDecompiler:
         d_finally.find_end_finally = True
         end_finally = d_finally.run()
         self.suite.add_statement(FinallyStatement(d_try.suite, d_finally.suite))
-        if end_finally.opcode == END_FINALLY:
+        if end_finally and end_finally.opcode == END_FINALLY:
             return end_finally[1]
         else:
             return self.END_NOW
@@ -2372,7 +2375,7 @@ class SuiteDecompiler:
         self.suite.add_statement(stmt)
 
         has_normal_else_clause = j_except.opcode == JUMP_FORWARD and j_except[2] != j_except.jump()
-        has_end_of_loop_else_clause = j_except.opcode == JUMP_ABSOLUTE and j_except.is_continue_jump
+        has_end_of_loop_else_clause = j_except.opcode == JUMP_ABSOLUTE and j_except.is_continue_jump and j_except[1].opcode == END_FINALLY
         has_return_else_clause = j_except.opcode == RETURN_VALUE
         if has_normal_else_clause or has_end_of_loop_else_clause or has_return_else_clause:
             assert j_except[1].opcode == END_FINALLY
@@ -3124,9 +3127,11 @@ class SuiteDecompiler:
                         #else:
                             #Exception
                 d_false = SuiteDecompiler(jump_addr, end_false)
-                d_false.find_end_finally = True
-                d_false.run()
+                d_false.expression_in_result = True
+                x = d_false.run()
                 false_expr = d_false.stack.pop()
+                if x and (end_false is None or x < end_false):
+                    end_false = x
                 cond = PyIfElse(cond, true_expr, false_expr)
                 self.stack.push(cond)
                 return end_false
