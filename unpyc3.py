@@ -1076,7 +1076,7 @@ class PyFormatString(PyExpr):
         return "f'{}'".format(''.join([
             p.base().replace('\'', '\"') if isinstance(p, PyFormatValue) else
             p.name if isinstance(p, PyName) else
-            str(p.val.encode('utf-8'))[1:].replace('\'', '').replace('{','{{').replace('}','}}')
+            repr(p.val+'\"')[1:-2].replace('{','{{').replace('}','}}')
             for p in self.params])
         )
 
@@ -1660,7 +1660,7 @@ class ImportStatement(PyStatement):
             else:
                 indent.write("import {} as {}", name, alias)
         elif self.fromlist == PyConst(('*',)):
-            indent.write("from {} import *", self.name.name)
+            indent.write("from {}{} import *", ''.rjust(self.level.val,'.'),self.name.name)
         else:
             names = []
             for name, alias in zip(self.fromlist, self.aslist):
@@ -1668,8 +1668,7 @@ class ImportStatement(PyStatement):
                     names.append(name)
                 else:
                     names.append("{} as {}".format(name, alias))
-            indent.write("from {}{} import {}", ''.join(['.' for i in range(self.level.val)]), self.name,
-                         ", ".join(names))
+            indent.write("from {}{} import {}", ''.rjust(self.level.val,'.'), self.name, ", ".join(names))
 
 
 class ImportFrom:
@@ -2658,7 +2657,12 @@ class SuiteDecompiler:
     def STORE_SUBSCR(self, addr):
         expr, sub = self.stack.pop(2)
         if self.code.annotationd and isinstance(sub,PyConst) and isinstance(expr,PyName) and expr.name == '__annotations__':
-            newname = sub.val + ': ' + str(self.stack.pop())
+            an = self.stack.pop()
+            if isinstance(an, PyConst) and isinstance(an.val, str):
+                an = an.val
+            else:
+                an = str(an)
+            newname = sub.val + ': ' + an
             if len(self.suite) >= 1:
                 lastst = self.suite[-1]
                 if isinstance(lastst, AssignStatement):
@@ -3721,9 +3725,19 @@ class SuiteDecompiler:
         if argc & 8:
             annotations = list(self.stack.pop())
         if argc & 4:
-            paramobjs = self.stack.pop()
-            if isinstance(paramobjs, PyDict):
-                paramobjs = {str(k[0].val).replace('\'', ''): str(k[1]) for k in paramobjs.items}
+            #paramobjs = self.stack.pop()
+            #if isinstance(paramobjs, PyDict):
+                #paramobjs = {str(k[0].val).replace('\'', ''): str(k[1]) for k in paramobjs.items}
+            p = self.stack.pop()
+            if isinstance(p, PyDict):
+                for nm,an in p.items:
+                    nm = str(nm.val).replace('\'', '')
+                    if isinstance(an, PyConst) and isinstance(an.val, str):
+                        paramobjs[nm] = an.val
+                    else:
+                        paramobjs[nm] = str(an)
+            else:
+                paramobjs = p
         if argc & 2:
             kwdefaults = self.stack.pop()
             if isinstance(kwdefaults, PyDict):
