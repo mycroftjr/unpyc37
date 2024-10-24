@@ -1488,22 +1488,23 @@ class PyGenExpr(PyComp):
 
 class PyYield(PyExpr):
     precedence = 0
+    pattern = "yield {}"
 
     def __init__(self, value):
         self.value = value
 
     def __str__(self):
-        return "(yield {})".format(self.value)
-
+        return self.pattern.format(self.value)
 
 class PyYieldFrom(PyExpr):
     precedence = 0
+    pattern = "yield from {}"
 
     def __init__(self, value):
         self.value = value
 
     def __str__(self):
-        return "(yield from {})".format(self.value)
+        return self.pattern.format(self.value)
 
 
 class PyStarred(PyExpr):
@@ -1719,6 +1720,7 @@ class IfStatement(PyStatement):
         self.false_suite.display(indent + 1)
 
     def gen_display(self, seq=()):
+        assert not self.false_suite
         s = 'if '
         if len(seq) >= 1:
             ss = seq[-1]
@@ -2470,7 +2472,7 @@ class SuiteDecompiler:
     def PRINT_EXPR(self, addr):
         expr = self.stack.pop()
         self.write("{}", expr)
-    
+
     #
     # Stack manipulation
     #
@@ -2653,6 +2655,8 @@ class SuiteDecompiler:
         expr = self.stack.pop()
         attrname = self.code.names[namei]
         self.write("del {}.{}", expr, attrname)
+
+    # SUBSCR
 
     def STORE_SUBSCR(self, addr):
         expr, sub = self.stack.pop(2)
