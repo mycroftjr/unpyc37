@@ -11,13 +11,14 @@ Decompile a module or a function using the decompile() function
 ...            return
 ...    
 >>> print(decompile(foo))
-
+<BLANKLINE>
 def foo(x, y, z=3, *args):
     global g
-    for i, j in zip(x, y):
+    for (i, j) in zip(x, y):
         if z == i + j or args[i] == j:
-            g = i, j
+            g = (i, j)
             return
+<BLANKLINE>
 >>>
 """
 from __future__ import annotations
